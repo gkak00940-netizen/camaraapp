@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#1d3557">
+  <title>업무 사진 PC 받기</title>
+  <link rel="manifest" href="manifest-pc.webmanifest">
+  <link rel="icon" href="icons/icon-192.png">
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="pc.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js" defer></script>
+  <script src="config.js" defer></script>
+  <script src="relay.js" defer></script>
+  <script src="pc.js" defer></script>
+</head>
+<body class="pc">
+  <header class="top">
+    <div class="top-row"><span class="app-name">업무 사진 · PC 받기</span><button type="button" id="install-app" class="ghost small" hidden>이 PC에 설치</button></div>
+    <h1 class="pc-title">휴대폰에서 보낸 사진을<br>이 PC에 목적별 폴더로 저장해요</h1>
+  </header>
+
+  <main class="pc-main">
+    <p id="pc-status" class="pc-status" role="status">준비하고 있어요…</p>
+
+    <section class="card pc-step" aria-labelledby="step1">
+      <h2 id="step1"><span class="num">1</span> 저장할 폴더</h2>
+      <p class="help">사진이 들어갈 폴더를 한 번만 골라 주세요. 예: 바탕화면에 “업무사진” 폴더를 만들어 고르기.<br>그 안에 <b>목적 이름 폴더</b>가 자동으로 생기고 사진이 들어가요.</p>
+      <p id="folder-name" class="folder-picked">아직 고르지 않았어요</p>
+      <div class="pc-actions">
+        <button type="button" id="pick-folder" class="accent">폴더 고르기</button>
+        <button type="button" id="regrant-folder" hidden>폴더 다시 연결</button>
+      </div>
+    </section>
+
+    <section class="card pc-step" aria-labelledby="step2">
+      <h2 id="step2"><span class="num">2</span> 휴대폰 연결</h2>
+      <div class="pair">
+        <div id="qr" class="qr" aria-label="휴대폰 연결 QR 코드"></div>
+        <div>
+          <p class="help">휴대폰의 <b>카메라 앱</b>으로 이 QR을 찍고, 뜨는 주소를 누르세요.<br>업무 사진 앱이 열리면서 이 PC와 연결돼요. (한 번만 하면 돼요)</p>
+          <label class="pc-name">이 PC 이름<input id="pc-name" class="text-input" maxlength="20" value="회사 PC"></label>
+          <div class="pc-actions">
+            <button type="button" id="copy-link">연결 주소 복사</button>
+            <button type="button" id="new-code">연결 코드 새로 만들기</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="card pc-step" aria-labelledby="step3">
+      <div class="heading"><h2 id="step3"><span class="num">3</span> 받은 사진</h2><span id="recv-count" class="count">0장</span></div>
+      <p class="help">이 화면(앱)이 켜져 있으면 바로 저장돼요. 꺼져 있을 때 보낸 사진은 다음에 켜면 저장돼요.</p>
+      <ul id="recv-log" class="recv-log"></ul>
+    </section>
+  </main>
+</body>
+</html>

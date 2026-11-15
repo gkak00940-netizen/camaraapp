@@ -11,6 +11,8 @@
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="업무 사진">
   <link rel="stylesheet" href="style.css">
+  <script src="config.js" defer></script>
+  <script src="relay.js" defer></script>
   <script src="app.js" defer></script>
 </head>
 <body>
@@ -51,6 +53,7 @@
       <p class="help select-help">사진 왼쪽 위 네모를 누르면 화면 아래에 보내기·삭제가 나와요.</p>
     </section>
     <p id="storage-info" class="foot"></p>
+    <p id="pc-link" class="foot" hidden>회사 PC에서는 <a href="pc.html">PC 받기 화면</a>을 열어 설치해 주세요.</p>
   </main>
 
   <!-- 사진을 고르면 화면 아래에 바로 나오는 보내기·삭제 -->
@@ -61,6 +64,7 @@
     </div>
     <div class="send-box" role="group" aria-labelledby="send-title">
       <p class="send-title" id="send-title"><span class="send-arrow" aria-hidden="true">↗</span> 보내기 <span class="send-sub">보낼 곳을 누르세요</span></p>
+      <button type="button" id="send-pc" class="send-pc" hidden><span class="pc-icon" aria-hidden="true">🖥</span><span><b id="send-pc-label">회사 PC로 보내기</b><small>PC에 목적별 폴더로 저장돼요</small></span></button>
       <div class="share-grid">
         <button type="button" class="share" data-target="drive"><span class="share-icon" aria-hidden="true">▲</span>드라이브</button>
         <button type="button" class="share" data-target="kakao"><span class="share-icon" aria-hidden="true">●</span>카카오톡</button>
@@ -101,6 +105,16 @@
     <label class="import-new"><span>새 목적으로 넣기</span><input id="import-new-name" maxlength="30" placeholder="새 목적 이름" autocomplete="off"></label>
     <p id="import-status" class="help" role="status"></p>
     <div class="dialog-actions"><button type="button" id="cancel-import">취소</button><button type="button" id="confirm-import" class="accent">넣기</button></div>
+  </dialog>
+  <!-- 목적 이름 바꾸기 -->
+  <dialog id="rename-dialog" aria-labelledby="rename-title">
+    <form id="rename-form" method="dialog">
+      <h2 id="rename-title">목적 이름 바꾸기</h2>
+      <p id="rename-old" class="help"></p>
+      <input id="rename-input" class="text-input" maxlength="30" autocomplete="off" enterkeyhint="done" aria-label="새 목적 이름">
+      <p id="rename-status" class="help" role="status"></p>
+      <div class="dialog-actions"><button type="button" id="cancel-rename">취소</button><button type="submit" class="accent">바꾸기</button></div>
+    </form>
   </dialog>
   <dialog id="delete-dialog"><h2 id="delete-title">사진을 지울까요?</h2><p id="delete-description"></p><p>지운 것은 되돌릴 수 없어요. 이미 보낸 사진에는 영향이 없어요.</p><div class="dialog-actions"><button type="button" id="cancel-delete">취소</button><button type="button" id="confirm-delete" class="danger">삭제</button></div></dialog>
 </body>

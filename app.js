@@ -101,6 +101,7 @@ function controls() {
   $('delete-selected').disabled = busy || !count;
   $('clear-selection').disabled = busy;
   $('import-photos').disabled = busy || !db;
+  $('send-pc').disabled = busy;
   $('capture').disabled = busy || !stream || !$('camera').videoWidth;
   $('viewfinder').disabled = !db || pendingCamera;
   document.querySelectorAll('.photo input').forEach(input => { input.disabled = busy; });
@@ -110,10 +111,14 @@ function controls() {
 let listOpen = false;
 const normalize = text => text.trim().replace(/\s+/g, ' ');
 
-function listItem(className, content, onPick, onDelete) {
+function listItem(className, content, onPick, onDelete, onRename) {
   const item = document.createElement('li'); item.className = `combo-item ${className}`; item.setAttribute('role', 'option');
   const pick = document.createElement('button'); pick.type = 'button'; pick.className = 'pick'; pick.append(...content);
   pick.addEventListener('click', onPick); item.append(pick);
+  if (onRename) {
+    const edit = document.createElement('button'); edit.type = 'button'; edit.className = 'del edit'; edit.textContent = '✎';
+    edit.setAttribute('aria-label', '이 목적 이름 바꾸기'); edit.addEventListener('click', onRename); item.append(edit);
+  }
   if (onDelete) {
     const del = document.createElement('button'); del.type = 'button'; del.className = 'del'; del.textContent = '×';
     del.setAttribute('aria-label', '이 목적 지우기'); del.addEventListener('click', onDelete); item.append(del);
@@ -130,7 +135,8 @@ function renderList(filter = '') {
     const active = purpose.id === current;
     const item = listItem(active ? 'active' : '', [span('check', active ? '✓' : ''), span('name', purpose.name), span('count', `${purposePhotos(purpose.id).length}장`)],
       () => { closeList(); selectPurpose(purpose.id); },
-      () => { closeList(); askDeletePurpose(purpose); });
+      () => { closeList(); askDeletePurpose(purpose); },
+      () => { closeList(); askRename(purpose); });
     item.setAttribute('aria-selected', String(active)); list.append(item);
   });
   // 입력한 글자가 목록에 없으면 새 목적으로 추가하는 줄을 맨 아래에 보여 줘요. (비슷한 목적을 먼저 고를 수 있게)
@@ -227,6 +233,7 @@ function photoCard(photo, { tag }) {
   } else time.textContent = timeLabel(photo.created);
   card.append(open, label, time);
   if (photo.received) { const r = document.createElement('span'); r.className = 'photo-recv'; r.textContent = '받음'; card.append(r); }
+  if (photo.pcSent) { const s = document.createElement('span'); s.className = 'photo-pc'; s.textContent = 'PC✓'; s.title = 'PC로 보냄'; card.append(s); }
   return card;
 }
 
@@ -284,6 +291,7 @@ function folderView() {
         shareStatus(`“${purpose.name}” 사진 ${ids.length}장을 골랐어요. 아래 보내기에서 앱을 누르세요.`);
       }));
       if (purpose.id) actions.append(button('＋ 가져오기', () => pickImport(purpose.id)));
+      if (purpose.id) actions.append(button('✎ 이름', () => askRename(purposes.find(p => p.id === purpose.id))));
       if (purpose.id && purpose.id !== current) actions.append(button('이 목적으로 찍기', () => selectPurpose(purpose.id), 'accent'));
       if (actions.children.length) body.append(actions);
       if (list.length) body.append(dayGroups(list, false));
@@ -439,6 +447,80 @@ window.addEventListener('popstate', () => { if (!$('camera-screen').hidden) stop
 document.addEventListener('fullscreenchange', () => { if (!document.fullscreenElement && !$('camera-screen').hidden && !pendingCamera) stopCamera(); });
 document.addEventListener('visibilitychange', () => { if (document.hidden) stopCamera(); });
 window.addEventListener('pagehide', stopCamera);
+
+/* ---------- 회사 PC로 보내기: PC 받기 앱과 연결해 두면 PC에 목적별 폴더로 저장돼요 ---------- */
+const PC_KEY = 'work-photos-pc-v1';
+function pcLink() { try { return JSON.parse(localStorage.getItem(PC_KEY)) || null; } catch { return null; } }
+
+// PC 받기 화면의 QR을 휴대폰 카메라로 찍으면 "?pair=연결코드"로 이 앱이 열려요. 그 코드를 기억해요.
+function receivePairing() {
+  const params = new URLSearchParams(location.search);
+  const box = params.get('pair');
+  if (!box) return;
+  history.replaceState(null, '', location.pathname);
+  if (!/^[a-f0-9]{32,}$/.test(box)) { notice('연결 코드가 올바르지 않아요. PC 받기 화면의 QR을 다시 찍어 주세요.', true); return; }
+  try { localStorage.setItem(PC_KEY, JSON.stringify({ box, name:params.get('pc') || '회사 PC', at:Date.now() })); } catch { /* 저장 못 하면 아래에서 안내 */ }
+  notice(`“${params.get('pc') || '회사 PC'}”와 연결했어요. 사진을 고르고 “회사 PC로 보내기”를 누르면 PC에 목적별 폴더로 저장돼요.`);
+}
+
+function renderPcButton() {
+  const on = window.Relay?.configured();
+  $('send-pc').hidden = !on; $('pc-link').hidden = !on;
+  const link = pcLink();
+  $('send-pc-label').textContent = link ? `${link.name}로 보내기` : '회사 PC로 보내기';
+}
+
+$('send-pc').addEventListener('click', async () => {
+  if (busy) return;
+  const picked = selectedPhotos(); if (!picked.length) return;
+  const link = pcLink();
+  if (!link) { shareStatus('먼저 회사 PC와 연결해 주세요. PC에서 “PC 받기” 화면을 열고, 화면의 QR을 휴대폰 카메라로 찍으면 연결돼요.', true); return; }
+  busy = true; controls();
+  let done = 0;
+  try {
+    for (const photo of picked) {
+      shareStatus(`${link.name}로 보내는 중… ${done + 1} / ${picked.length}`);
+      await Relay.send(link.box, photo, purposeName(photo), photoFiles([photo])[0].name.replace(/_1\.jpg$/, '.jpg'));
+      done++;
+      const updated = { ...photo, pcSent:Date.now() };
+      await write('photos', t => t.objectStore('photos').put(updated));
+      photos = photos.map(p => p.id === updated.id ? updated : p);
+    }
+    renderPhotos();
+    // 선택은 그대로 둬서, PC에서 확인한 뒤 바로 아래 "삭제"로 휴대폰 공간을 비울 수 있게 해요.
+    shareStatus(`${link.name}로 ${done}장을 보냈어요. PC 받기 앱이 켜져 있으면 바로 목적별 폴더에 저장돼요. (꺼져 있으면 다음에 켤 때 저장돼요)`);
+  } catch (error) {
+    shareStatus(`${done ? `${done}장은 보냈지만, ` : ''}PC로 보내지 못했어요. 인터넷 연결을 확인하고 다시 눌러 주세요.${error?.message === 'not-configured' ? ' (중계 설정 없음)' : ''}`, true);
+  } finally { busy = false; controls(); renderPhotos(); }
+});
+
+/* ---------- 목적 이름 바꾸기 (사진은 그대로, 이름만 바뀌어요) ---------- */
+let renaming = null;
+function askRename(purpose) {
+  if (busy || !purpose) return;
+  renaming = purpose;
+  $('rename-old').textContent = `지금 이름: ${purpose.name} · 사진 ${purposePhotos(purpose.id).length}장`;
+  $('rename-input').value = purpose.name; $('rename-status').textContent = '';
+  $('rename-dialog').showModal(); $('rename-input').select();
+}
+$('cancel-rename').addEventListener('click', () => $('rename-dialog').close());
+$('rename-form').addEventListener('submit', async event => {
+  event.preventDefault();
+  if (busy || !renaming) return;
+  const name = normalize($('rename-input').value);
+  if (!name) { $('rename-status').textContent = '새 이름을 적어 주세요.'; return; }
+  if (name === renaming.name) { $('rename-dialog').close(); return; }
+  if (purposes.some(p => p.name === name && p.id !== renaming.id)) { $('rename-status').textContent = '같은 이름의 목적이 이미 있어요. 다른 이름을 적어 주세요.'; return; }
+  busy = true;
+  try {
+    const updated = { ...renaming, name };
+    await write('purposes', t => t.objectStore('purposes').put(updated));
+    purposes = purposes.map(p => p.id === updated.id ? updated : p);
+    $('rename-dialog').close();
+    notice(`목적 이름을 “${renaming.name}” → “${name}”(으)로 바꿨어요. 사진은 그대로예요.`);
+  } catch { $('rename-status').textContent = '이름을 바꾸지 못했어요. 다시 해 주세요.'; }
+  finally { busy = false; render(); }
+});
 
 /* ---------- 받은 사진 가져오기: 갤러리·카톡에서 저장한 사진, 다른 앱의 공유 ---------- */
 let importFiles = [];
@@ -693,6 +775,7 @@ async function initialize() {
     notice(current ? `“${currentPurpose().name}” 목적이에요. 화면을 누르면 카메라가 켜져요.` : '맨 위에 촬영 목적을 입력하고 저장해 주세요.');
     if (IN_APP) { notice('카카오톡 등 앱 안에서 열었어요. 보내기가 안 될 수 있으니 크롬으로 열어 주세요. (⋮ 메뉴 → 다른 브라우저로 열기)', true); }
     await receiveSharedPhotos();
+    receivePairing(); renderPcButton();
   } catch { db = null; controls(); notice('보관함을 열지 못했어요. 일반 크롬 창에서 다시 열어 주세요. 비공개 모드에서는 저장이 안 될 수 있어요.', true); }
 }
 initialize();
