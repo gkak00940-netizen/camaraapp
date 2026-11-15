@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#1d3557">
+  <title>업무 사진</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon-192.png">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="업무 사진">
+  <link rel="stylesheet" href="style.css">
+  <script src="app.js" defer></script>
+</head>
+<body>
+  <header class="top">
+    <div class="top-row"><span class="app-name">업무 사진</span><button type="button" id="install-app" class="ghost small" hidden>앱 설치</button></div>
+    <p class="purpose-label">지금 찍는 목적</p>
+    <h1 id="current-purpose">목적을 먼저 저장해 주세요</h1>
+    <div id="purposes" class="chips" role="list" aria-label="저장한 목적"></div>
+    <form id="purpose-form" class="purpose-form">
+      <label for="purpose-name" class="sr-only">새 목적</label>
+      <input id="purpose-name" maxlength="30" placeholder="예: 3층 배관 점검" autocomplete="off" enterkeyhint="done">
+      <button type="submit" class="accent">저장</button>
+    </form>
+  </header>
+
+  <main>
+    <section class="card camera-card" aria-label="사진 찍기">
+      <button type="button" id="viewfinder" class="viewfinder" aria-label="카메라 켜기">
+        <video id="camera" autoplay playsinline muted hidden></video>
+        <span id="camera-placeholder" class="placeholder"><span class="camera-symbol" aria-hidden="true">◎</span><span id="placeholder-text">눌러서 카메라 켜기</span></span>
+        <span id="flash" class="flash" aria-hidden="true"></span>
+      </button>
+      <div id="camera-actions" class="camera-actions" hidden>
+        <button type="button" id="stop-camera" class="ghost-dark">끄기</button>
+        <button type="button" id="capture" class="shutter" aria-label="사진 찍기"><span></span></button>
+        <span id="shot-count" class="shot-count">0장</span>
+      </div>
+    </section>
+
+    <p id="notice" class="notice" role="status">불러오고 있어요…</p>
+
+    <section class="card" aria-labelledby="album-title">
+      <div class="heading"><h2 id="album-title">사진</h2><span id="album-count" class="count">0장</span></div>
+      <div class="album-tools"><button type="button" id="select-batch" disabled>최근 10장 선택</button><button type="button" id="clear-selection" disabled>선택 해제</button></div>
+      <p id="empty" class="empty">이 목적으로 찍은 사진이 없어요.</p>
+      <div id="photos" class="photos"></div>
+    </section>
+
+    <section class="card share-card" aria-labelledby="share-title">
+      <div class="heading"><h2 id="share-title">보내기</h2><span id="selection-count" class="count">선택 0장</span></div>
+      <div class="share-grid">
+        <button type="button" class="share" data-target="drive" disabled><span class="share-icon" aria-hidden="true">▲</span>구글 드라이브</button>
+        <button type="button" class="share" data-target="kakao" disabled><span class="share-icon" aria-hidden="true">●</span>카카오톡</button>
+        <button type="button" class="share" data-target="email" disabled><span class="share-icon" aria-hidden="true">✉</span>이메일</button>
+        <button type="button" class="share" data-target="sms" disabled><span class="share-icon" aria-hidden="true">✆</span>문자</button>
+        <button type="button" class="share wide" data-target="other" disabled><span class="share-icon" aria-hidden="true">⋯</span>다른 앱 (퀵 쉐어 등)</button>
+      </div>
+      <p class="help">버튼을 누르면 휴대폰 공유 화면이 열려요. 안내에 나오는 앱을 눌러 주세요.</p>
+      <button type="button" id="delete-selected" class="danger" disabled>선택한 사진 삭제</button>
+    </section>
+    <p id="storage-info" class="foot"></p>
+  </main>
+
+  <div id="share-hint" class="share-hint" hidden></div>
+
+  <dialog id="photo-dialog"><div class="dialog-top"><p id="large-caption"></p><button type="button" id="close-photo">닫기</button></div><img id="large-photo" alt="크게 본 사진"></dialog>
+  <dialog id="delete-dialog"><h2 id="delete-title">사진을 지울까요?</h2><p id="delete-description"></p><p>지운 것은 되돌릴 수 없어요. 이미 보낸 사진에는 영향이 없어요.</p><div class="dialog-actions"><button type="button" id="cancel-delete">취소</button><button type="button" id="confirm-delete" class="danger">삭제</button></div></dialog>
+</body>
+</html>
