@@ -40,35 +40,39 @@
 
     <section class="card" aria-labelledby="album-title">
       <div class="heading"><h2 id="album-title">사진 보관함</h2><span id="album-count" class="count">0장</span></div>
+      <button type="button" id="import-photos" class="import-btn">＋ 받은 사진 가져오기</button>
+      <input type="file" id="import-input" accept="image/*" multiple hidden>
       <div class="view-tabs" role="tablist" aria-label="사진 보기 방식">
         <button type="button" role="tab" class="view-tab" data-view="purpose" aria-selected="true">목적별</button>
         <button type="button" role="tab" class="view-tab" data-view="date" aria-selected="false">날짜별</button>
       </div>
       <p id="empty" class="empty">목적을 고르고 사진을 찍어 보세요.</p>
       <div id="album" class="album"></div>
-      <div class="album-tools"><button type="button" id="clear-selection" disabled>선택 해제</button></div>
-    </section>
-
-    <section class="card share-card" aria-labelledby="share-title">
-      <div class="heading"><h2 id="share-title">보내기</h2><span id="selection-count" class="count">선택 0장</span></div>
-      <div class="share-grid">
-        <button type="button" class="share" data-target="drive" disabled><span class="share-icon" aria-hidden="true">▲</span>구글 드라이브</button>
-        <button type="button" class="share" data-target="kakao" disabled><span class="share-icon" aria-hidden="true">●</span>카카오톡</button>
-        <button type="button" class="share" data-target="email" disabled><span class="share-icon" aria-hidden="true">✉</span>이메일</button>
-        <button type="button" class="share" data-target="sms" disabled><span class="share-icon" aria-hidden="true">✆</span>문자</button>
-        <button type="button" class="share wide" data-target="other" disabled><span class="share-icon" aria-hidden="true">⋯</span>다른 앱 (퀵 쉐어 등)</button>
-      </div>
-      <p id="share-status" class="share-status" role="status" hidden></p>
-      <div id="share-fallback" class="share-fallback" hidden>
-        <button type="button" id="open-chrome" class="accent" hidden>크롬으로 열기</button>
-        <button type="button" id="save-photos">선택한 사진 휴대폰에 저장</button>
-        <p class="help">저장한 사진은 갤러리(다운로드 폴더)에 들어가요. 갤러리에서 바로 보낼 수 있어요.</p>
-      </div>
-      <p class="help">사진을 체크한 뒤 버튼을 누르면 휴대폰 공유 화면이 열려요. 안내에 나오는 앱을 눌러 주세요.</p>
-      <button type="button" id="delete-selected" class="danger" disabled>선택한 사진 삭제</button>
+      <p class="help select-help">사진 왼쪽 위 네모를 누르면 화면 아래에 보내기·삭제가 나와요.</p>
     </section>
     <p id="storage-info" class="foot"></p>
   </main>
+
+  <!-- 사진을 고르면 화면 아래에 바로 나오는 보내기·삭제 -->
+  <section id="action-bar" class="action-bar" hidden aria-label="선택한 사진 보내기와 삭제">
+    <div class="bar-top">
+      <strong id="selection-count">0장 선택</strong>
+      <button type="button" id="delete-selected" class="danger small">삭제</button>
+      <button type="button" id="clear-selection" class="small">선택 해제</button>
+    </div>
+    <div class="share-grid">
+      <button type="button" class="share" data-target="drive"><span class="share-icon" aria-hidden="true">▲</span>드라이브</button>
+      <button type="button" class="share" data-target="kakao"><span class="share-icon" aria-hidden="true">●</span>카카오톡</button>
+      <button type="button" class="share" data-target="email"><span class="share-icon" aria-hidden="true">✉</span>이메일</button>
+      <button type="button" class="share" data-target="sms"><span class="share-icon" aria-hidden="true">✆</span>문자</button>
+      <button type="button" class="share" data-target="other"><span class="share-icon" aria-hidden="true">⋯</span>다른 앱</button>
+    </div>
+    <p id="share-status" class="share-status" role="status" hidden></p>
+    <div id="share-fallback" class="share-fallback" hidden>
+      <button type="button" id="open-chrome" class="accent" hidden>크롬으로 열기</button>
+      <button type="button" id="save-photos">선택한 사진 휴대폰에 저장</button>
+    </div>
+  </section>
 
   <div id="share-hint" class="share-hint" hidden></div>
 
@@ -86,6 +90,15 @@
   </div>
 
   <dialog id="photo-dialog"><div class="dialog-top"><p id="large-caption"></p><button type="button" id="close-photo">닫기</button></div><img id="large-photo" alt="크게 본 사진"></dialog>
+  <!-- 받은 사진을 어느 목적에 넣을지 고르기 -->
+  <dialog id="import-dialog" aria-labelledby="import-title">
+    <h2 id="import-title">사진을 어느 목적에 넣을까요?</h2>
+    <div class="import-preview" id="import-preview"></div>
+    <div id="import-purposes" class="import-purposes" role="radiogroup" aria-label="넣을 목적"></div>
+    <label class="import-new"><span>새 목적으로 넣기</span><input id="import-new-name" maxlength="30" placeholder="새 목적 이름" autocomplete="off"></label>
+    <p id="import-status" class="help" role="status"></p>
+    <div class="dialog-actions"><button type="button" id="cancel-import">취소</button><button type="button" id="confirm-import" class="accent">넣기</button></div>
+  </dialog>
   <dialog id="delete-dialog"><h2 id="delete-title">사진을 지울까요?</h2><p id="delete-description"></p><p>지운 것은 되돌릴 수 없어요. 이미 보낸 사진에는 영향이 없어요.</p><div class="dialog-actions"><button type="button" id="cancel-delete">취소</button><button type="button" id="confirm-delete" class="danger">삭제</button></div></dialog>
 </body>
 </html>

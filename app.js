@@ -89,13 +89,18 @@ const selectedPhotos = () => photos.filter(photo => selected.has(photo.id)).sort
 
 function controls() {
   const count = selectedPhotos().length;
-  $('selection-count').textContent = `선택 ${count}장`;
-  // 보내기 버튼은 항상 누를 수 있게 두고, 사진을 안 골랐으면 버튼 바로 밑에 알려 줘요.
+  // 사진을 하나라도 고르면 화면 아래에 보내기·삭제 바가 바로 나와요. (스크롤 안 내려도 돼요)
+  const wasHidden = $('action-bar').hidden;
+  $('action-bar').hidden = !count;
+  document.body.classList.toggle('has-bar', !!count);
+  if (!count) { $('share-status').hidden = true; $('share-fallback').hidden = true; }
+  else if (wasHidden) { $('share-status').hidden = true; $('share-fallback').hidden = true; }
+  $('selection-count').textContent = `${count}장 선택`;
   document.querySelectorAll('.share').forEach(button => { button.disabled = busy; });
   $('save-photos').disabled = busy || !count;
   $('delete-selected').disabled = busy || !count;
-  $('clear-selection').disabled = busy || !count;
-  $('clear-selection').textContent = count ? `선택 해제 (${count}장)` : '선택 해제';
+  $('clear-selection').disabled = busy;
+  $('import-photos').disabled = busy || !db;
   $('capture').disabled = busy || !stream || !$('camera').videoWidth;
   $('viewfinder').disabled = !db || pendingCamera;
   document.querySelectorAll('.photo input').forEach(input => { input.disabled = busy; });
@@ -221,6 +226,7 @@ function photoCard(photo, { tag }) {
     card.style.setProperty('--dot', purposeColor(photo.purpose)); card.classList.add('tagged');
   } else time.textContent = timeLabel(photo.created);
   card.append(open, label, time);
+  if (photo.received) { const r = document.createElement('span'); r.className = 'photo-recv'; r.textContent = '받음'; card.append(r); }
   return card;
 }
 
@@ -249,7 +255,7 @@ function folderView() {
     const isOpen = openFolders.has(purpose.id);
     const folder = document.createElement('section'); folder.className = `folder${isOpen ? ' open' : ''}${purpose.id === current ? ' current' : ''}`;
     const head = document.createElement('button'); head.type = 'button'; head.className = 'folder-head'; head.setAttribute('aria-expanded', String(isOpen));
-    folder.style.setProperty('--dot', purposeColor(purpose.id));
+    folder.style.setProperty('--dot', purposeColor(purpose.id)); folder.dataset.id = purpose.id;
     const name = document.createElement('span'); name.className = 'folder-name'; name.textContent = purpose.name;
     if (purpose.id === current) { const now = document.createElement('span'); now.className = 'now'; now.textContent = '촬영 중'; name.append(now); }
     const count = document.createElement('span'); count.className = 'folder-count'; count.textContent = `${list.length}장`;
@@ -277,6 +283,7 @@ function folderView() {
         selected.clear(); ids.forEach(id => selected.add(id)); renderPhotos();
         shareStatus(`“${purpose.name}” 사진 ${ids.length}장을 골랐어요. 아래 보내기에서 앱을 누르세요.`);
       }));
+      if (purpose.id) actions.append(button('＋ 가져오기', () => pickImport(purpose.id)));
       if (purpose.id && purpose.id !== current) actions.append(button('이 목적으로 찍기', () => selectPurpose(purpose.id), 'accent'));
       if (actions.children.length) body.append(actions);
       if (list.length) body.append(dayGroups(list, false));
@@ -433,6 +440,120 @@ document.addEventListener('fullscreenchange', () => { if (!document.fullscreenEl
 document.addEventListener('visibilitychange', () => { if (document.hidden) stopCamera(); });
 window.addEventListener('pagehide', stopCamera);
 
+/* ---------- 받은 사진 가져오기: 갤러리·카톡에서 저장한 사진, 다른 앱의 공유 ---------- */
+let importFiles = [];
+let importTarget = '';
+let importUrls = [];
+
+function pickImport(purposeId = '') {
+  if (busy || !db) return;
+  importTarget = purposeId;
+  $('import-input').value = '';
+  $('import-input').click();
+}
+$('import-photos').addEventListener('click', () => pickImport(''));
+$('import-input').addEventListener('change', () => {
+  const files = [...$('import-input').files];
+  if (files.length) openImportDialog(files);
+});
+
+function openImportDialog(files) {
+  importFiles = files;
+  importUrls.forEach(url => URL.revokeObjectURL(url)); importUrls = [];
+  $('import-preview').replaceChildren(...files.slice(0, 12).map(file => {
+    const img = document.createElement('img'); const url = URL.createObjectURL(file); importUrls.push(url);
+    img.src = url; img.alt = ''; return img;
+  }));
+  $('import-title').textContent = `사진 ${files.length}장을 어느 목적에 넣을까요?`;
+  const pick = importTarget || current;
+  const list = [...purposes].sort((a, b) => b.used - a.used);
+  $('import-purposes').replaceChildren(...list.map(purpose => {
+    const label = document.createElement('label');
+    const radio = document.createElement('input'); radio.type = 'radio'; radio.name = 'import-purpose'; radio.value = purpose.id; radio.checked = purpose.id === pick;
+    radio.addEventListener('change', () => { $('import-new-name').value = ''; });
+    const dot = document.createElement('span'); dot.className = 'dot'; dot.style.background = purposeColor(purpose.id);
+    const n = document.createElement('span'); n.className = 'n'; n.textContent = `${purposePhotos(purpose.id).length}장`;
+    label.append(radio, dot, document.createTextNode(purpose.name), n); return label;
+  }));
+  $('import-new-name').value = '';
+  $('import-status').textContent = list.length ? '' : '먼저 새 목적 이름을 적어 주세요.';
+  $('confirm-import').disabled = false; $('cancel-import').disabled = false;
+  $('import-dialog').showModal();
+  if (!list.length) $('import-new-name').focus();
+}
+// 새 목적 칸에 적으면 위의 선택은 풀어요.
+$('import-new-name').addEventListener('input', () => {
+  if ($('import-new-name').value.trim()) document.querySelectorAll('[name="import-purpose"]').forEach(r => { r.checked = false; });
+});
+$('cancel-import').addEventListener('click', () => $('import-dialog').close());
+$('import-dialog').addEventListener('close', () => { importUrls.forEach(url => URL.revokeObjectURL(url)); importUrls = []; $('import-preview').replaceChildren(); });
+
+// 큰 사진은 카메라로 찍은 것과 같은 크기(긴 변 1920)로 줄여서 휴대폰 공간을 아껴요. 사진 방향도 맞춰요.
+async function shrinkImage(file) {
+  try {
+    const bitmap = await createImageBitmap(file, { imageOrientation:'from-image' });
+    const ratio = Math.min(1, 1920 / Math.max(bitmap.width, bitmap.height));
+    const canvas = document.createElement('canvas'); canvas.width = Math.round(bitmap.width * ratio); canvas.height = Math.round(bitmap.height * ratio);
+    canvas.getContext('2d').drawImage(bitmap, 0, 0, canvas.width, canvas.height); bitmap.close?.();
+    const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.85));
+    if (blob) return { blob, width:canvas.width, height:canvas.height };
+  } catch { /* 아래에서 원본으로 시도해요. */ }
+  if (/^image\/(jpeg|png|webp|gif)$/.test(file.type)) return { blob:file, width:0, height:0 };
+  return null;
+}
+
+$('confirm-import').addEventListener('click', async () => {
+  if (busy) return;
+  const newName = normalize($('import-new-name').value);
+  let purposeId = document.querySelector('[name="import-purpose"]:checked')?.value || '';
+  if (!newName && !purposeId) { $('import-status').textContent = '넣을 목적을 고르거나 새 목적 이름을 적어 주세요.'; return; }
+  busy = true; controls(); $('confirm-import').disabled = true; $('cancel-import').disabled = true;
+  try {
+    if (newName) {
+      const existing = purposes.find(p => p.name === newName);
+      if (existing) purposeId = existing.id;
+      else {
+        const purpose = { id:crypto.randomUUID(), name:newName, created:Date.now(), used:Date.now() };
+        await write('purposes', t => t.objectStore('purposes').add(purpose)); purposes.push(purpose); purposeId = purpose.id;
+      }
+    }
+    const added = []; let skipped = 0; const received = Date.now();
+    for (const [index, file] of importFiles.entries()) {
+      $('import-status').textContent = `사진 넣는 중… ${index + 1} / ${importFiles.length}`;
+      const image = await shrinkImage(file);
+      if (!image) { skipped++; continue; }
+      added.push({ id:crypto.randomUUID(), purpose:purposeId, created:file.lastModified || received, received, blob:image.blob, width:image.width, height:image.height });
+    }
+    const purpose = { ...purposes.find(p => p.id === purposeId), used:Date.now() };
+    await write(['photos', 'purposes'], t => { added.forEach(photo => t.objectStore('photos').add(photo)); t.objectStore('purposes').put(purpose); });
+    photos.push(...added); purposes = purposes.map(p => p.id === purpose.id ? purpose : p);
+    $('import-dialog').close();
+    openFolders.add(purposeId); view = 'purpose'; savePrefs();
+    notice(`“${purpose.name}”에 받은 사진 ${added.length}장을 넣었어요.${skipped ? ` (${skipped}장은 열 수 없는 형식이라 뺐어요)` : ''}`, !added.length);
+    busy = false; render();
+    // 넣은 목적 폴더로 화면을 옮겨서 바로 보이게 해요.
+    document.querySelector(`.folder[data-id="${purposeId}"]`)?.scrollIntoView({ behavior:'smooth', block:'start' });
+  } catch { $('import-status').textContent = '사진을 넣지 못했어요. 휴대폰 저장 공간을 확인하고 다시 해 주세요.'; }
+  finally { if (busy) { busy = false; render(); } $('confirm-import').disabled = false; $('cancel-import').disabled = false; }
+});
+
+// 다른 앱(카카오톡·갤러리 등)에서 "공유 → 업무 사진"으로 보낸 사진을 받아요. (휴대폰에 앱을 설치한 경우)
+async function receiveSharedPhotos() {
+  if (!new URLSearchParams(location.search).has('shared')) return;
+  history.replaceState(null, '', location.pathname);
+  try {
+    const cache = await caches.open('work-photo-share');
+    const requests = await cache.keys(); const files = [];
+    for (const request of requests) {
+      const response = await cache.match(request); const blob = await response.blob();
+      files.push(new File([blob], decodeURIComponent(response.headers.get('X-Name') || 'photo.jpg'), { type:blob.type || 'image/jpeg', lastModified:Number(response.headers.get('X-Modified')) || Date.now() }));
+      await cache.delete(request);
+    }
+    if (files.length) { importTarget = ''; openImportDialog(files); }
+    else notice('공유한 사진을 찾지 못했어요. "받은 사진 가져오기"로 다시 넣어 주세요.', true);
+  } catch { notice('공유한 사진을 받지 못했어요. "받은 사진 가져오기"로 넣어 주세요.', true); }
+}
+
 /* ---------- 선택 ---------- */
 $('clear-selection').addEventListener('click', () => { selected.clear(); renderPhotos(); });
 
@@ -571,6 +692,7 @@ async function initialize() {
     render();
     notice(current ? `“${currentPurpose().name}” 목적이에요. 화면을 누르면 카메라가 켜져요.` : '맨 위에 촬영 목적을 입력하고 저장해 주세요.');
     if (IN_APP) { notice('카카오톡 등 앱 안에서 열었어요. 보내기가 안 될 수 있으니 크롬으로 열어 주세요. (⋮ 메뉴 → 다른 브라우저로 열기)', true); }
+    await receiveSharedPhotos();
   } catch { db = null; controls(); notice('보관함을 열지 못했어요. 일반 크롬 창에서 다시 열어 주세요. 비공개 모드에서는 저장이 안 될 수 있어요.', true); }
 }
 initialize();
