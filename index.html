@@ -17,15 +17,16 @@
   <header class="top">
     <div class="top-row"><span class="app-name">업무 사진</span><button type="button" id="install-app" class="ghost small" hidden>앱 설치</button></div>
     <h1 class="sr-only">업무 사진</h1>
-    <form id="purpose-form" class="purpose-form">
+    <!-- 목적 상자: 누르면 저장한 목적 목록이 펼쳐지고, 새로 입력하면 추가돼요 -->
+    <form id="purpose-form" class="purpose-form" autocomplete="off">
       <label for="purpose-name" class="purpose-label">촬영 목적</label>
-      <div class="purpose-row">
-        <input id="purpose-name" maxlength="30" placeholder="목적 입력 (예: 3층 배관 점검)" autocomplete="off" enterkeyhint="done">
-        <button type="submit" class="accent">추가</button>
+      <div class="combo">
+        <input id="purpose-name" maxlength="30" placeholder="예: 3층 배관 점검" enterkeyhint="done"
+          role="combobox" aria-expanded="false" aria-controls="purposes" aria-autocomplete="list">
+        <button type="button" id="purpose-toggle" class="combo-toggle" aria-label="목적 목록 열기" tabindex="-1">▾</button>
+        <ul id="purposes" class="combo-list" role="listbox" aria-label="저장한 목적" hidden></ul>
       </div>
     </form>
-    <div id="purposes" class="chips" role="radiogroup" aria-label="저장한 목적 중 선택"></div>
-    <p id="chips-empty" class="chips-empty">추가한 목적이 여기 옆으로 나열돼요. 눌러서 고르세요.</p>
   </header>
 
   <main>

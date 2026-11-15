@@ -97,31 +97,61 @@ function controls() {
   document.querySelectorAll('.photo input').forEach(input => { input.disabled = busy; });
 }
 
-function renderPurposes() {
-  // 입력한 순서대로 왼쪽부터 옆으로 나열하고, 고른 목적은 흰색으로 표시해요.
-  $('purposes').replaceChildren();
-  let activeChip = null;
-  [...purposes].sort((a, b) => a.created - b.created).forEach(purpose => {
-    const isActive = purpose.id === current;
-    const chip = document.createElement('div'); chip.className = isActive ? 'chip active' : 'chip';
-    const pick = document.createElement('button'); pick.type = 'button';
-    pick.setAttribute('role', 'radio'); pick.setAttribute('aria-checked', String(isActive));
-    const count = document.createElement('span'); count.className = 'chip-count'; count.textContent = purposePhotos(purpose.id).length;
-    pick.append(document.createTextNode(`${isActive ? '✓ ' : ''}${purpose.name}`), count);
-    pick.addEventListener('click', () => selectPurpose(purpose.id));
-    const remove = document.createElement('button'); remove.type = 'button'; remove.className = 'chip-del'; remove.textContent = '×';
-    remove.setAttribute('aria-label', `${purpose.name} 목적 지우기`);
-    remove.addEventListener('click', () => askDeletePurpose(purpose));
-    chip.append(pick, remove); $('purposes').append(chip);
-    if (isActive) activeChip = chip;
-  });
-  $('chips-empty').hidden = purposes.length > 0;
-  // 고른 목적이 줄 밖에 있으면 보이도록 옆으로 살짝 밀어 줘요. (앞 목적도 조금 보이게)
-  if (activeChip) {
-    const row = $('purposes'); const left = activeChip.offsetLeft - row.offsetLeft; const right = left + activeChip.offsetWidth;
-    if (left < row.scrollLeft + 16) row.scrollLeft = Math.max(0, left - 60);
-    else if (right > row.scrollLeft + row.clientWidth - 16) row.scrollLeft = right - row.clientWidth + 60;
+/* ---------- 목적 상자: 누르면 저장한 목적 목록이 상자 아래로 펼쳐져요 ---------- */
+let listOpen = false;
+const normalize = text => text.trim().replace(/\s+/g, ' ');
+
+function listItem(className, content, onPick, onDelete) {
+  const item = document.createElement('li'); item.className = `combo-item ${className}`; item.setAttribute('role', 'option');
+  const pick = document.createElement('button'); pick.type = 'button'; pick.className = 'pick'; pick.append(...content);
+  pick.addEventListener('click', onPick); item.append(pick);
+  if (onDelete) {
+    const del = document.createElement('button'); del.type = 'button'; del.className = 'del'; del.textContent = '×';
+    del.setAttribute('aria-label', '이 목적 지우기'); del.addEventListener('click', onDelete); item.append(del);
   }
+  return item;
+}
+const span = (className, text) => { const s = document.createElement('span'); s.className = className; s.textContent = text; return s; };
+
+function renderList(filter = '') {
+  const list = $('purposes'); list.replaceChildren();
+  const typed = normalize(filter);
+  const shown = [...purposes].sort((a, b) => b.used - a.used).filter(p => !typed || p.name.includes(typed));
+  shown.forEach(purpose => {
+    const active = purpose.id === current;
+    const item = listItem(active ? 'active' : '', [span('check', active ? '✓' : ''), span('name', purpose.name), span('count', `${purposePhotos(purpose.id).length}장`)],
+      () => { closeList(); selectPurpose(purpose.id); },
+      () => { closeList(); askDeletePurpose(purpose); });
+    item.setAttribute('aria-selected', String(active)); list.append(item);
+  });
+  // 입력한 글자가 목록에 없으면 새 목적으로 추가하는 줄을 맨 아래에 보여 줘요. (비슷한 목적을 먼저 고를 수 있게)
+  if (typed && !purposes.some(p => p.name === typed)) {
+    list.append(listItem('add', [span('check', '＋'), span('name', `“${typed}” 새 목적으로 추가`)], () => addPurpose(typed)));
+  }
+  if (!list.children.length) { const empty = document.createElement('li'); empty.className = 'combo-empty'; empty.textContent = '목적을 입력하면 여기에 저장돼요.'; list.append(empty); }
+}
+
+function openList() {
+  listOpen = true; renderList($('purpose-name').value === (currentPurpose()?.name || '') ? '' : $('purpose-name').value);
+  $('purposes').hidden = false; $('purpose-name').closest('.combo').classList.add('open');
+  $('purpose-name').setAttribute('aria-expanded', 'true');
+}
+function closeList() {
+  listOpen = false; $('purposes').hidden = true; $('purpose-name').closest('.combo').classList.remove('open');
+  $('purpose-name').setAttribute('aria-expanded', 'false');
+  $('purpose-name').value = currentPurpose()?.name || ''; $('purpose-name').blur();
+}
+
+$('purpose-name').addEventListener('focus', () => { openList(); $('purpose-name').select(); });
+$('purpose-name').addEventListener('input', () => { if (!listOpen) openList(); else renderList($('purpose-name').value); });
+$('purpose-name').addEventListener('keydown', event => { if (event.key === 'Escape') closeList(); });
+$('purpose-toggle').addEventListener('click', () => { if (listOpen) closeList(); else $('purpose-name').focus(); });
+// 상자 밖을 누르면 목록을 닫아요.
+document.addEventListener('pointerdown', event => { if (listOpen && !event.target.closest('.combo')) closeList(); });
+
+function renderPurposes() {
+  if (!listOpen) $('purpose-name').value = currentPurpose()?.name || '';
+  else renderList($('purpose-name').value);
   const purpose = currentPurpose();
   $('album-title').textContent = purpose ? `${purpose.name} 사진` : '사진';
   $('cam-purpose').textContent = purpose ? purpose.name : '';
@@ -174,21 +204,27 @@ function selectPurpose(id) {
 }
 
 /* ---------- 목적 저장 ---------- */
-$('purpose-form').addEventListener('submit', async event => {
-  event.preventDefault();
+async function addPurpose(rawName) {
   if (busy || !db) return;
-  const name = $('purpose-name').value.trim().replace(/\s+/g, ' ');
-  if (!name) { notice('목적을 입력해 주세요. 예: 3층 배관 점검', true); $('purpose-name').focus(); return; }
+  const name = normalize(rawName);
+  if (!name) { closeList(); return; }
   const existing = purposes.find(p => p.name === name);
-  $('purpose-name').value = ''; $('purpose-name').blur();
-  if (existing) { selectPurpose(existing.id); return; }
+  if (existing) { closeList(); selectPurpose(existing.id); return; }
   busy = true; controls();
   try {
     const purpose = { id:crypto.randomUUID(), name, created:Date.now(), used:Date.now() };
     await write('purposes', t => t.objectStore('purposes').add(purpose));
-    purposes.push(purpose); busy = false; selectPurpose(purpose.id);
-    notice(`“${name}” 목적을 저장했어요. 아래 화면을 누르면 카메라가 켜져요.`);
-  } catch { busy = false; notice('목적을 저장하지 못했어요. 저장 공간을 확인해 주세요.', true); controls(); }
+    purposes.push(purpose); busy = false; closeList(); selectPurpose(purpose.id);
+    notice(`“${name}” 목적을 저장했어요. 아래 검은 칸을 누르면 카메라가 켜져요.`);
+  } catch { busy = false; closeList(); notice('목적을 저장하지 못했어요. 저장 공간을 확인해 주세요.', true); controls(); }
+}
+
+// 입력하고 완료(엔터)를 누르면: 목록에 있으면 고르고, 없으면 새로 추가해요.
+$('purpose-form').addEventListener('submit', event => {
+  event.preventDefault();
+  const typed = $('purpose-name').value;
+  if (normalize(typed) === (currentPurpose()?.name || '')) { closeList(); return; }
+  addPurpose(typed);
 });
 
 function askDeletePurpose(purpose) {
