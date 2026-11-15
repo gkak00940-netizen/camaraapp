@@ -98,22 +98,34 @@ function controls() {
 }
 
 function renderPurposes() {
+  // 입력한 순서대로 왼쪽부터 옆으로 나열하고, 고른 목적은 흰색으로 표시해요.
   $('purposes').replaceChildren();
-  [...purposes].sort((a, b) => b.used - a.used).forEach(purpose => {
-    const chip = document.createElement('div'); chip.className = purpose.id === current ? 'chip active' : 'chip'; chip.setAttribute('role', 'listitem');
+  let activeChip = null;
+  [...purposes].sort((a, b) => a.created - b.created).forEach(purpose => {
+    const isActive = purpose.id === current;
+    const chip = document.createElement('div'); chip.className = isActive ? 'chip active' : 'chip';
     const pick = document.createElement('button'); pick.type = 'button';
-    pick.textContent = `${purpose.name} · ${purposePhotos(purpose.id).length}`;
-    pick.setAttribute('aria-pressed', String(purpose.id === current));
+    pick.setAttribute('role', 'radio'); pick.setAttribute('aria-checked', String(isActive));
+    const count = document.createElement('span'); count.className = 'chip-count'; count.textContent = purposePhotos(purpose.id).length;
+    pick.append(document.createTextNode(`${isActive ? '✓ ' : ''}${purpose.name}`), count);
     pick.addEventListener('click', () => selectPurpose(purpose.id));
     const remove = document.createElement('button'); remove.type = 'button'; remove.className = 'chip-del'; remove.textContent = '×';
     remove.setAttribute('aria-label', `${purpose.name} 목적 지우기`);
     remove.addEventListener('click', () => askDeletePurpose(purpose));
     chip.append(pick, remove); $('purposes').append(chip);
+    if (isActive) activeChip = chip;
   });
+  $('chips-empty').hidden = purposes.length > 0;
+  // 고른 목적이 줄 밖에 있으면 보이도록 옆으로 살짝 밀어 줘요. (앞 목적도 조금 보이게)
+  if (activeChip) {
+    const row = $('purposes'); const left = activeChip.offsetLeft - row.offsetLeft; const right = left + activeChip.offsetWidth;
+    if (left < row.scrollLeft + 16) row.scrollLeft = Math.max(0, left - 60);
+    else if (right > row.scrollLeft + row.clientWidth - 16) row.scrollLeft = right - row.clientWidth + 60;
+  }
   const purpose = currentPurpose();
-  $('current-purpose').textContent = purpose ? purpose.name : '목적을 먼저 저장해 주세요';
   $('album-title').textContent = purpose ? `${purpose.name} 사진` : '사진';
-  $('placeholder-text').textContent = purpose ? '눌러서 카메라 켜기' : '위에서 목적을 저장하면 카메라를 켤 수 있어요';
+  $('cam-purpose').textContent = purpose ? purpose.name : '';
+  $('placeholder-text').textContent = purpose ? `눌러서 카메라 켜기 · ${purpose.name}` : '위에서 목적을 추가하면 카메라를 켤 수 있어요';
 }
 
 function renderPhotos() {
@@ -188,33 +200,49 @@ function askDeletePurpose(purpose) {
   $('delete-dialog').showModal();
 }
 
-/* ---------- 카메라: 화면을 누르면 켜지고, 켜진 뒤에 누르면 찍혀요 ---------- */
+/* ---------- 카메라: 폰 화면 전체로 열고, 화면이나 둥근 버튼을 누르면 찍혀요 ---------- */
+let toastTimer = 0;
+function camToast(text, error = false) {
+  clearTimeout(toastTimer);
+  $('cam-toast').textContent = text; $('cam-toast').className = error ? 'cam-toast error' : 'cam-toast'; $('cam-toast').hidden = false;
+  toastTimer = setTimeout(() => { $('cam-toast').hidden = true; }, error ? 4000 : 1200);
+}
+
+let lastShotUrl = '';
 function stopCamera() {
   cameraRequest++; pendingCamera = false;
   stream?.getTracks().forEach(track => track.stop()); stream = null;
-  $('camera').srcObject = null; $('camera').hidden = true; $('camera-placeholder').hidden = false;
-  $('camera-actions').hidden = true; $('viewfinder').setAttribute('aria-label', '카메라 켜기');
+  $('camera').srcObject = null;
+  if ($('camera-screen').hidden) { controls(); return; }
+  $('camera-screen').hidden = true; document.body.style.overflow = '';
+  if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+  // 휴대폰 뒤로 가기로 카메라를 닫을 수 있게 넣어 둔 기록을 정리해요.
+  if (history.state?.camera) history.back();
   controls();
 }
 
 async function startCamera() {
   if (pendingCamera || busy) return;
-  if (!current) { notice('먼저 위에 목적을 입력하고 저장해 주세요.', true); $('purpose-name').focus(); return; }
+  if (!current) { notice('먼저 위에 목적을 입력하고 추가를 눌러 주세요.', true); $('purpose-name').focus(); return; }
   if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia) { notice('이 화면에서는 카메라를 쓸 수 없어요. 휴대폰 크롬에서 앱 주소를 열어 주세요.', true); return; }
+  // 누른 순간 바로 전체 화면으로 열어요. (전체 화면 요청은 누른 직후에만 허용돼요)
+  $('camera-screen').hidden = false; document.body.style.overflow = 'hidden';
+  $('camera-screen').requestFullscreen?.({ navigationUI:'hide' }).catch(() => {});
+  if (!history.state?.camera) history.pushState({ camera:true }, '');
+  $('cam-purpose').textContent = currentPurpose().name;
+  shotsThisSession = 0; $('shot-count').textContent = '0장';
+  $('last-shot').hidden = !lastShotUrl;
   const requestId = ++cameraRequest;
-  pendingCamera = true; controls(); $('placeholder-text').textContent = '카메라를 켜고 있어요…';
+  pendingCamera = true; controls();
   try {
     const opened = await navigator.mediaDevices.getUserMedia({ audio:false, video:{ facingMode:{ ideal:'environment' }, width:{ ideal:2560 }, height:{ ideal:1920 } } });
     if (requestId !== cameraRequest || document.hidden) { opened.getTracks().forEach(track => track.stop()); return; }
     stream = opened; $('camera').srcObject = stream;
-    $('camera').hidden = false; $('camera-placeholder').hidden = true; $('camera-actions').hidden = false;
-    $('viewfinder').setAttribute('aria-label', '사진 찍기');
     await $('camera').play();
-    notice(`“${currentPurpose().name}” 촬영 중 · 화면이나 둥근 버튼을 누르면 찍혀요.`);
   } catch (error) {
     stopCamera();
     notice(error.name === 'NotAllowedError' ? '카메라 권한이 필요해요. 크롬 주소창 왼쪽 아이콘 → 권한에서 카메라를 허용해 주세요.' : error.name === 'NotFoundError' ? '카메라를 찾지 못했어요.' : '카메라를 켜지 못했어요. 다른 앱의 카메라를 닫고 다시 눌러 주세요.', true);
-  } finally { pendingCamera = false; renderPurposes(); controls(); }
+  } finally { pendingCamera = false; controls(); }
 }
 
 async function capture() {
@@ -233,15 +261,22 @@ async function capture() {
     await write(['photos', 'purposes'], t => { t.objectStore('photos').add(photo); t.objectStore('purposes').put(purpose); });
     photos.push(photo); purposes = purposes.map(p => p.id === purpose.id ? purpose : p);
     shotsThisSession++; $('shot-count').textContent = `${shotsThisSession}장`;
+    if (lastShotUrl) URL.revokeObjectURL(lastShotUrl);
+    lastShotUrl = URL.createObjectURL(blob); $('last-shot').src = lastShotUrl; $('last-shot').hidden = false;
+    camToast('저장됨');
     notice(`“${purpose.name}”에 저장했어요. (${sizeLabel(blob.size)})`);
-  } catch { notice('사진을 저장하지 못했어요. 휴대폰 저장 공간을 확인하고 다시 찍어 주세요.', true); }
+  } catch { camToast('사진을 저장하지 못했어요. 휴대폰 저장 공간을 확인해 주세요.', true); notice('사진을 저장하지 못했어요. 휴대폰 저장 공간을 확인하고 다시 찍어 주세요.', true); }
   finally { busy = false; render(); }
 }
 
-$('viewfinder').addEventListener('click', () => { if (stream) capture(); else startCamera(); });
+$('viewfinder').addEventListener('click', startCamera);
 $('capture').addEventListener('click', capture);
+$('camera').addEventListener('click', capture);
 $('camera').addEventListener('loadeddata', controls);
-$('stop-camera').addEventListener('click', () => { stopCamera(); notice('카메라를 껐어요. 다시 켜려면 화면을 눌러 주세요.'); });
+$('stop-camera').addEventListener('click', () => { stopCamera(); notice(`사진 ${shotsThisSession}장을 찍었어요. 다시 찍으려면 검은 칸을 눌러 주세요.`); });
+// 휴대폰 뒤로 가기 또는 전체 화면이 풀리면 카메라를 닫아요.
+window.addEventListener('popstate', () => { if (!$('camera-screen').hidden) stopCamera(); });
+document.addEventListener('fullscreenchange', () => { if (!document.fullscreenElement && !$('camera-screen').hidden && !pendingCamera) stopCamera(); });
 document.addEventListener('visibilitychange', () => { if (document.hidden) stopCamera(); });
 window.addEventListener('pagehide', stopCamera);
 
