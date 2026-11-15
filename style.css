@@ -79,6 +79,10 @@ h2 { margin:0; font-size:20px; overflow-wrap:anywhere; }
 [data-target="email"] .share-icon { background:#d93025; }
 [data-target="sms"] .share-icon { background:#2e7d32; }
 [data-target="other"] .share-icon { background:var(--muted); }
+.share-status { margin:12px 0 0; padding:12px 14px; border-radius:12px; background:#e3eef8; color:var(--navy); font-weight:700; line-height:1.6; }
+.share-status.error { background:#fdecea; color:var(--danger); }
+.share-fallback { display:flex; flex-direction:column; gap:8px; margin-top:10px; }
+.share-fallback .help { margin:0; }
 .danger { width:100%; color:var(--danger); background:#fff6f5; border-color:#f3c1bb; }
 .foot { color:var(--muted); font-size:14px; text-align:center; line-height:1.6; }
 

@@ -86,7 +86,9 @@ const selectedPhotos = () => shownPhotos().filter(photo => selected.has(photo.id
 function controls() {
   const count = selectedPhotos().length;
   $('selection-count').textContent = `선택 ${count}장`;
-  document.querySelectorAll('.share').forEach(button => { button.disabled = busy || !count; });
+  // 보내기 버튼은 항상 누를 수 있게 두고, 사진을 안 골랐으면 버튼 바로 밑에 알려 줘요.
+  document.querySelectorAll('.share').forEach(button => { button.disabled = busy; });
+  $('save-photos').disabled = busy || !count;
   $('delete-selected').disabled = busy || !count;
   $('clear-selection').disabled = busy || !count;
   $('select-batch').disabled = busy || !shownPhotos().length;
@@ -254,14 +256,62 @@ function showHint(text) {
   hintTimer = setTimeout(() => { $('share-hint').hidden = true; }, 6000);
 }
 
+// 보내기 결과는 버튼 바로 밑에 보여 줘요. (위쪽 안내 칸은 화면 밖이라 안 보여요)
+function shareStatus(text, error = false) {
+  $('share-status').textContent = text; $('share-status').hidden = false;
+  $('share-status').className = error ? 'share-status error' : 'share-status';
+  notice(text, error);
+}
+
+// 카카오톡·네이버 등 앱 안에서 연 화면은 사진 공유가 안 돼요. 크롬으로 다시 열게 안내해요.
+const IN_APP = /KAKAOTALK|NAVER|Instagram|FBAN|FBAV|Line\/|DaumApps|; wv\)/i.test(navigator.userAgent);
+const IS_ANDROID = /Android/i.test(navigator.userAgent);
+
+function showFallback(reason) {
+  $('share-fallback').hidden = false;
+  $('open-chrome').hidden = !(IN_APP && IS_ANDROID);
+  shareStatus(reason, true);
+}
+
+function photoFiles(picked) {
+  const name = safeName(currentPurpose()?.name || '업무사진');
+  return picked.map((photo, index) => new File([photo.blob], `${name}_${fileStamp(photo.created)}_${index + 1}.jpg`, { type:'image/jpeg', lastModified:photo.created }));
+}
+
+$('open-chrome').addEventListener('click', () => {
+  const url = location.href.replace(/^https?:\/\//, '').split('#')[0];
+  location.href = `intent://${url}#Intent;scheme=https;package=com.android.chrome;end`;
+});
+
+// 공유가 안 될 때: 사진을 휴대폰에 저장해서 갤러리에서 보내게 해요.
+$('save-photos').addEventListener('click', async () => {
+  const picked = selectedPhotos(); if (!picked.length) { shareStatus('먼저 저장할 사진을 체크해 주세요.', true); return; }
+  const files = photoFiles(picked);
+  for (const file of files) {
+    const url = URL.createObjectURL(file); const link = document.createElement('a');
+    link.href = url; link.download = file.name; document.body.append(link); link.click(); link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 10000);
+    await new Promise(resolve => setTimeout(resolve, 400));
+  }
+  shareStatus(`사진 ${files.length}장을 휴대폰에 저장했어요. 갤러리나 '내 파일 > 다운로드'에서 보낼 수 있어요.`);
+});
+
 document.querySelectorAll('.share').forEach(button => button.addEventListener('click', async () => {
   if (busy) return;
   const target = TARGETS[button.dataset.target];
-  const picked = selectedPhotos(); if (!picked.length) return;
-  if (button.dataset.target === 'sms' && picked.length > MAX_SMS) { notice(`문자는 한 번에 ${MAX_SMS}장까지 보내 주세요. 많으면 드라이브나 카카오톡이 좋아요.`, true); return; }
+  const picked = selectedPhotos();
+  if (!picked.length) { shareStatus(shownPhotos().length ? '먼저 보낼 사진을 체크해 주세요. (사진 왼쪽 위 네모 칸, 또는 "최근 10장 선택")' : '보낼 사진이 없어요. 먼저 사진을 찍어 주세요.', true); return; }
+  if (button.dataset.target === 'sms' && picked.length > MAX_SMS) { shareStatus(`문자는 한 번에 ${MAX_SMS}장까지 보내 주세요. 많으면 드라이브나 카카오톡이 좋아요.`, true); return; }
+  const files = photoFiles(picked);
   const name = safeName(currentPurpose()?.name || '업무사진');
-  const files = picked.map((photo, index) => new File([photo.blob], `${name}_${fileStamp(photo.created)}_${index + 1}.jpg`, { type:'image/jpeg', lastModified:photo.created }));
-  if (!navigator.share || !navigator.canShare?.({ files })) { notice('이 브라우저는 사진 공유를 지원하지 않아요. 휴대폰 크롬에서 열어 주세요. 그래도 안 되면 사진 수를 줄여 주세요.', true); return; }
+  if (!navigator.share) {
+    showFallback(IN_APP ? '카카오톡 등 앱 안에서 연 화면이라 보내기가 안 돼요. "크롬으로 열기"를 누르거나, 사진을 휴대폰에 저장해서 보내 주세요.' : '이 브라우저는 보내기를 지원하지 않아요. 휴대폰 크롬에서 열거나, 사진을 휴대폰에 저장해서 보내 주세요.');
+    return;
+  }
+  if (navigator.canShare && !navigator.canShare({ files })) {
+    showFallback(picked.length > 1 ? '이 브라우저는 사진 여러 장을 한 번에 보낼 수 없어요. 사진 수를 줄이거나, 휴대폰에 저장해서 보내 주세요.' : '이 브라우저는 사진 보내기를 지원하지 않아요. 크롬에서 열거나, 휴대폰에 저장해서 보내 주세요.');
+    return;
+  }
   const data = { files };
   // 이메일은 제목과 본문을 함께 넣어요. 카카오톡·문자에는 글을 넣으면 사진이 빠지는 경우가 있어서 사진만 보내요.
   if (target.withText) {
@@ -271,9 +321,11 @@ document.querySelectorAll('.share').forEach(button => button.addEventListener('c
   busy = true; controls(); showHint(target.hint);
   try {
     await navigator.share(data);
-    notice('보낼 앱으로 사진을 넘겼어요. 받은 것을 확인한 뒤 지워 주세요.');
+    $('share-fallback').hidden = true;
+    shareStatus('보낼 앱으로 사진을 넘겼어요. 받은 것을 확인한 뒤 지워 주세요.');
   } catch (error) {
-    notice(error.name === 'AbortError' ? '보내기를 취소했어요.' : '보내지 못했어요. 사진 수를 줄여 다시 시도해 주세요.', error.name !== 'AbortError');
+    if (error.name === 'AbortError') shareStatus('보내기를 취소했어요.');
+    else showFallback(`보내지 못했어요 (${error.name}). 사진 수를 줄여 다시 해 보거나, 휴대폰에 저장해서 보내 주세요.`);
   } finally { busy = false; $('share-hint').hidden = true; controls(); }
 }));
 
@@ -320,6 +372,7 @@ async function initialize() {
     if (!current && purposes.length) current = [...purposes].sort((a, b) => b.used - a.used)[0].id;
     render();
     notice(current ? `“${currentPurpose().name}” 목적이에요. 화면을 누르면 카메라가 켜져요.` : '맨 위에 촬영 목적을 입력하고 저장해 주세요.');
+    if (IN_APP) { notice('카카오톡 등 앱 안에서 열었어요. 보내기가 안 될 수 있으니 크롬으로 열어 주세요. (⋮ 메뉴 → 다른 브라우저로 열기)', true); }
   } catch { db = null; controls(); notice('보관함을 열지 못했어요. 일반 크롬 창에서 다시 열어 주세요. 비공개 모드에서는 저장이 안 될 수 있어요.', true); }
 }
 initialize();

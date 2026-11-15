@@ -58,7 +58,13 @@
         <button type="button" class="share" data-target="sms" disabled><span class="share-icon" aria-hidden="true">✆</span>문자</button>
         <button type="button" class="share wide" data-target="other" disabled><span class="share-icon" aria-hidden="true">⋯</span>다른 앱 (퀵 쉐어 등)</button>
       </div>
-      <p class="help">버튼을 누르면 휴대폰 공유 화면이 열려요. 안내에 나오는 앱을 눌러 주세요.</p>
+      <p id="share-status" class="share-status" role="status" hidden></p>
+      <div id="share-fallback" class="share-fallback" hidden>
+        <button type="button" id="open-chrome" class="accent" hidden>크롬으로 열기</button>
+        <button type="button" id="save-photos">선택한 사진 휴대폰에 저장</button>
+        <p class="help">저장한 사진은 갤러리(다운로드 폴더)에 들어가요. 갤러리에서 바로 보낼 수 있어요.</p>
+      </div>
+      <p class="help">사진을 체크한 뒤 버튼을 누르면 휴대폰 공유 화면이 열려요. 안내에 나오는 앱을 눌러 주세요.</p>
       <button type="button" id="delete-selected" class="danger" disabled>선택한 사진 삭제</button>
     </section>
     <p id="storage-info" class="foot"></p>
