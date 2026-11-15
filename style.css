@@ -122,12 +122,16 @@ h2 { margin:0; font-size:20px; overflow-wrap:anywhere; }
 
 /* 사진을 고르면 아래에 붙는 보내기·삭제 바 */
 .action-bar { position:fixed; z-index:12; left:0; right:0; bottom:0; padding:12px 12px calc(12px + env(safe-area-inset-bottom)); background:white; border-radius:18px 18px 0 0; box-shadow:0 -6px 24px #1d355733; }
-body.has-bar main { padding-bottom:230px; }
+body.has-bar main { padding-bottom:290px; }
 .bar-top { display:flex; align-items:center; gap:8px; }
 .bar-top strong { flex:1; font-size:19px; color:var(--navy); }
 .bar-top .small { min-height:44px; padding:6px 14px; }
-.bar-top .danger { width:auto; }
-.share-grid { display:grid; grid-template-columns:repeat(5,1fr); gap:6px; margin-top:10px; }
+.send-box { margin-top:10px; padding:10px; border-radius:14px; background:#e8f0fa; border:2px solid #b9cde6; }
+.send-title { display:flex; align-items:center; gap:6px; margin:0 2px 8px; font-size:18px; font-weight:800; color:var(--navy); }
+.send-arrow { display:inline-grid; place-items:center; width:26px; height:26px; border-radius:50%; background:var(--navy); color:white; font-size:15px; }
+.send-sub { margin-left:auto; font-size:14px; font-weight:600; color:var(--muted); }
+.share-grid { display:grid; grid-template-columns:repeat(5,1fr); gap:6px; }
+.delete-link { display:block; width:100%; min-height:44px; margin-top:8px; padding:6px; border:0; background:none; color:var(--danger); font-size:15px; font-weight:700; }
 .share { display:flex; flex-direction:column; align-items:center; gap:4px; min-height:68px; padding:8px 2px; font-size:13px; white-space:nowrap; }
 .share-icon { display:inline-grid; place-items:center; width:32px; height:32px; flex:none; border-radius:9px; color:white; font-size:15px; }
 .action-bar .share-status { margin-top:10px; padding:10px 12px; font-size:15px; }

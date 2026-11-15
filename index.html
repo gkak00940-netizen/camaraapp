@@ -57,21 +57,24 @@
   <section id="action-bar" class="action-bar" hidden aria-label="선택한 사진 보내기와 삭제">
     <div class="bar-top">
       <strong id="selection-count">0장 선택</strong>
-      <button type="button" id="delete-selected" class="danger small">삭제</button>
       <button type="button" id="clear-selection" class="small">선택 해제</button>
     </div>
-    <div class="share-grid">
-      <button type="button" class="share" data-target="drive"><span class="share-icon" aria-hidden="true">▲</span>드라이브</button>
-      <button type="button" class="share" data-target="kakao"><span class="share-icon" aria-hidden="true">●</span>카카오톡</button>
-      <button type="button" class="share" data-target="email"><span class="share-icon" aria-hidden="true">✉</span>이메일</button>
-      <button type="button" class="share" data-target="sms"><span class="share-icon" aria-hidden="true">✆</span>문자</button>
-      <button type="button" class="share" data-target="other"><span class="share-icon" aria-hidden="true">⋯</span>다른 앱</button>
+    <div class="send-box" role="group" aria-labelledby="send-title">
+      <p class="send-title" id="send-title"><span class="send-arrow" aria-hidden="true">↗</span> 보내기 <span class="send-sub">보낼 곳을 누르세요</span></p>
+      <div class="share-grid">
+        <button type="button" class="share" data-target="drive"><span class="share-icon" aria-hidden="true">▲</span>드라이브</button>
+        <button type="button" class="share" data-target="kakao"><span class="share-icon" aria-hidden="true">●</span>카카오톡</button>
+        <button type="button" class="share" data-target="email"><span class="share-icon" aria-hidden="true">✉</span>이메일</button>
+        <button type="button" class="share" data-target="sms"><span class="share-icon" aria-hidden="true">✆</span>문자</button>
+        <button type="button" class="share" data-target="other"><span class="share-icon" aria-hidden="true">⋯</span>다른 앱</button>
+      </div>
     </div>
     <p id="share-status" class="share-status" role="status" hidden></p>
     <div id="share-fallback" class="share-fallback" hidden>
       <button type="button" id="open-chrome" class="accent" hidden>크롬으로 열기</button>
       <button type="button" id="save-photos">선택한 사진 휴대폰에 저장</button>
     </div>
+    <button type="button" id="delete-selected" class="delete-link">🗑 선택한 사진 삭제</button>
   </section>
 
   <div id="share-hint" class="share-hint" hidden></div>
