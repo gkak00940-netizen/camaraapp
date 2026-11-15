@@ -39,10 +39,14 @@
     <p id="notice" class="notice" role="status">불러오고 있어요…</p>
 
     <section class="card" aria-labelledby="album-title">
-      <div class="heading"><h2 id="album-title">사진</h2><span id="album-count" class="count">0장</span></div>
-      <div class="album-tools"><button type="button" id="select-batch" disabled>최근 10장 선택</button><button type="button" id="clear-selection" disabled>선택 해제</button></div>
-      <p id="empty" class="empty">이 목적으로 찍은 사진이 없어요.</p>
-      <div id="photos" class="photos"></div>
+      <div class="heading"><h2 id="album-title">사진 보관함</h2><span id="album-count" class="count">0장</span></div>
+      <div class="view-tabs" role="tablist" aria-label="사진 보기 방식">
+        <button type="button" role="tab" class="view-tab" data-view="purpose" aria-selected="true">목적별</button>
+        <button type="button" role="tab" class="view-tab" data-view="date" aria-selected="false">날짜별</button>
+      </div>
+      <p id="empty" class="empty">목적을 고르고 사진을 찍어 보세요.</p>
+      <div id="album" class="album"></div>
+      <div class="album-tools"><button type="button" id="clear-selection" disabled>선택 해제</button></div>
     </section>
 
     <section class="card share-card" aria-labelledby="share-title">

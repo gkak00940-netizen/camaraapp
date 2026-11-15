@@ -75,13 +75,17 @@ function write(names, operation) {
     transaction.onabort = () => reject(transaction.error || new Error('저장하지 못했어요.'));
   });
 }
-function savePrefs() { try { localStorage.setItem(PREF_KEY, JSON.stringify({ current })); } catch { /* 설정 저장 실패는 무시해요. */ } }
+let view = 'purpose';          // 보관함 보기: 'purpose'(목적별) 또는 'date'(날짜별)
+const openFolders = new Set(); // 펼친 목적 폴더
+function savePrefs() { try { localStorage.setItem(PREF_KEY, JSON.stringify({ current, view })); } catch { /* 설정 저장 실패는 무시해요. */ } }
 
 /* ---------- 화면 ---------- */
 const currentPurpose = () => purposes.find(p => p.id === current);
-const purposePhotos = id => photos.filter(photo => photo.purpose === id);
-const shownPhotos = () => purposePhotos(current).sort((a, b) => b.created - a.created);
-const selectedPhotos = () => shownPhotos().filter(photo => selected.has(photo.id));
+const purposeOf = photo => purposes.find(p => p.id === photo.purpose);
+const purposeName = photo => purposeOf(photo)?.name || '목적 없음';
+const newestFirst = (a, b) => b.created - a.created;
+const purposePhotos = id => photos.filter(photo => photo.purpose === id).sort(newestFirst);
+const selectedPhotos = () => photos.filter(photo => selected.has(photo.id)).sort(newestFirst);
 
 function controls() {
   const count = selectedPhotos().length;
@@ -91,7 +95,7 @@ function controls() {
   $('save-photos').disabled = busy || !count;
   $('delete-selected').disabled = busy || !count;
   $('clear-selection').disabled = busy || !count;
-  $('select-batch').disabled = busy || !shownPhotos().length;
+  $('clear-selection').textContent = count ? `선택 해제 (${count}장)` : '선택 해제';
   $('capture').disabled = busy || !stream || !$('camera').videoWidth;
   $('viewfinder').disabled = !db || pendingCamera;
   document.querySelectorAll('.photo input').forEach(input => { input.disabled = busy; });
@@ -153,52 +157,165 @@ function renderPurposes() {
   if (!listOpen) $('purpose-name').value = currentPurpose()?.name || '';
   else renderList($('purpose-name').value);
   const purpose = currentPurpose();
-  $('album-title').textContent = purpose ? `${purpose.name} 사진` : '사진';
   $('cam-purpose').textContent = purpose ? purpose.name : '';
   $('placeholder-text').textContent = purpose ? `눌러서 카메라 켜기 · ${purpose.name}` : '위에서 목적을 추가하면 카메라를 켤 수 있어요';
 }
 
+/* ---------- 사진 보관함: 목적별 폴더 / 날짜별 ---------- */
+const WEEK = ['일', '월', '화', '수', '목', '금', '토'];
+const dayKey = value => { const d = new Date(value); return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`; };
+const timeLabel = value => { const d = new Date(value); return `${pad(d.getHours())}:${pad(d.getMinutes())}`; };
+function dayLabel(value) {
+  const d = new Date(value); const today = new Date(); today.setHours(0, 0, 0, 0);
+  const that = new Date(d); that.setHours(0, 0, 0, 0);
+  const diff = Math.round((today - that) / 86400000);
+  const base = `${d.getMonth() + 1}월 ${d.getDate()}일 (${WEEK[d.getDay()]})`;
+  if (diff === 0) return `오늘 · ${base}`;
+  if (diff === 1) return `어제 · ${base}`;
+  if (diff < 7) return `${diff}일 전 · ${base}`;
+  return d.getFullYear() === today.getFullYear() ? base : `${d.getFullYear()}년 ${base}`;
+}
+// 목적마다 고유한 색. 추가한 순서대로 정해져서 바뀌지 않아요.
+const COLORS = ['#e76f51', '#2a9d8f', '#e9c46a', '#8e7dbe', '#4895ef', '#f4a261', '#43aa8b', '#d16ba5'];
+function purposeColor(id) {
+  const order = [...purposes].sort((a, b) => a.created - b.created).findIndex(p => p.id === id);
+  return order < 0 ? '#9aa4b2' : COLORS[order % COLORS.length];
+}
+function shortDay(value) { const d = new Date(value); return `${d.getMonth() + 1}/${d.getDate()}`; }
+function photoUrl(photo) { const url = URL.createObjectURL(photo.blob); urls.push(url); return url; }
+
+function groupByDay(list) {
+  const groups = [];
+  list.forEach(photo => { const key = dayKey(photo.created); const last = groups[groups.length - 1]; if (last?.key === key) last.items.push(photo); else groups.push({ key, items:[photo] }); });
+  return groups;
+}
+
+function toggleSelect(photo, on, card) {
+  if (on && selected.size >= MAX_SHARE) { shareStatus(`한 번에 최대 ${MAX_SHARE}장까지 고를 수 있어요.`, true); return false; }
+  if (on) selected.add(photo.id); else selected.delete(photo.id);
+  card?.classList.toggle('selected', on); controls(); return true;
+}
+
+// 사진 한 장: 누르면 크게 보기, 왼쪽 위 네모로 선택. 날짜별 보기에서는 어느 목적인지 이름표를 붙여요.
+function photoCard(photo, { tag }) {
+  const card = document.createElement('article'); card.className = selected.has(photo.id) ? 'photo selected' : 'photo';
+  const open = document.createElement('button'); open.type = 'button'; open.className = 'photo-open';
+  open.setAttribute('aria-label', `${purposeName(photo)} ${dateLabel(photo.created)} 사진 크게 보기`);
+  const image = document.createElement('img'); image.src = photoUrl(photo); image.alt = ''; image.loading = 'lazy'; open.append(image);
+  open.addEventListener('click', () => {
+    largeUrl = URL.createObjectURL(photo.blob); $('large-photo').src = largeUrl;
+    $('large-caption').textContent = `${purposeName(photo)} · ${dayLabel(photo.created).replace(/^.* · /, '')} ${timeLabel(photo.created)} · ${sizeLabel(photo.blob.size)}`;
+    $('photo-dialog').showModal();
+  });
+  const label = document.createElement('label');
+  const checkbox = document.createElement('input'); checkbox.type = 'checkbox'; checkbox.checked = selected.has(photo.id);
+  checkbox.setAttribute('aria-label', `${purposeName(photo)} ${dateLabel(photo.created)} 사진 선택`);
+  checkbox.addEventListener('change', () => { if (!toggleSelect(photo, checkbox.checked, card)) checkbox.checked = false; });
+  label.append(checkbox);
+  const time = document.createElement('p'); time.className = 'photo-time';
+  // 날짜별 보기: 아래 띠에 목적 이름(색 표시)과 시각을 함께 보여 줘요.
+  if (tag) {
+    const name = document.createElement('b'); name.className = 'photo-purpose'; name.textContent = purposeName(photo);
+    name.style.setProperty('--dot', purposeColor(photo.purpose));
+    time.append(name, document.createTextNode(timeLabel(photo.created)));
+    card.style.setProperty('--dot', purposeColor(photo.purpose)); card.classList.add('tagged');
+  } else time.textContent = timeLabel(photo.created);
+  card.append(open, label, time);
+  return card;
+}
+
+function dayGroups(list, tag) {
+  const frag = document.createDocumentFragment();
+  groupByDay(list).forEach(group => {
+    const head = document.createElement('h3'); head.className = 'day'; head.textContent = dayLabel(group.items[0].created) + ' ';
+    const n = document.createElement('span'); n.textContent = `${group.items.length}장`; head.append(n);
+    const grid = document.createElement('div'); grid.className = 'photos';
+    group.items.forEach(photo => grid.append(photoCard(photo, { tag })));
+    frag.append(head, grid);
+  });
+  return frag;
+}
+
+function button(text, onClick, className = '') { const b = document.createElement('button'); b.type = 'button'; b.className = className; b.textContent = text; b.addEventListener('click', onClick); return b; }
+
+// 목적별: 목적마다 폴더 하나. 이름·장수·처음~마지막 촬영 날짜·미리보기 4장. 누르면 날짜별로 펼쳐져요.
+function folderView() {
+  const frag = document.createDocumentFragment();
+  const withPhotos = purposes.map(p => ({ purpose:p, list:purposePhotos(p.id) }))
+    .sort((a, b) => (b.purpose.id === current) - (a.purpose.id === current) || (b.list[0]?.created || b.purpose.created) - (a.list[0]?.created || a.purpose.created));
+  const orphans = photos.filter(photo => !purposeOf(photo)).sort(newestFirst);
+  if (orphans.length) withPhotos.push({ purpose:{ id:'', name:'목적 없음' }, list:orphans });
+  withPhotos.forEach(({ purpose, list }) => {
+    const isOpen = openFolders.has(purpose.id);
+    const folder = document.createElement('section'); folder.className = `folder${isOpen ? ' open' : ''}${purpose.id === current ? ' current' : ''}`;
+    const head = document.createElement('button'); head.type = 'button'; head.className = 'folder-head'; head.setAttribute('aria-expanded', String(isOpen));
+    folder.style.setProperty('--dot', purposeColor(purpose.id));
+    const name = document.createElement('span'); name.className = 'folder-name'; name.textContent = purpose.name;
+    if (purpose.id === current) { const now = document.createElement('span'); now.className = 'now'; now.textContent = '촬영 중'; name.append(now); }
+    const count = document.createElement('span'); count.className = 'folder-count'; count.textContent = `${list.length}장`;
+    const meta = document.createElement('span'); meta.className = 'folder-meta';
+    // 예: "11/14 ~ 11/16 (오늘) · 2일 촬영"
+    meta.textContent = !list.length ? '아직 사진이 없어요' : (() => {
+      const first = shortDay(list[list.length - 1].created), last = shortDay(list[0].created);
+      const rel = dayLabel(list[0].created).includes(' · ') ? ` (${dayLabel(list[0].created).split(' · ')[0]})` : '';
+      return `${first === last ? '' : `${first} ~ `}${last}${rel} · ${groupByDay(list).length}일 촬영`;
+    })();
+    head.append(name, count, meta);
+    head.addEventListener('click', () => { if (openFolders.has(purpose.id)) openFolders.delete(purpose.id); else openFolders.add(purpose.id); renderPhotos(); });
+    folder.append(head);
+    if (!isOpen && list.length) {
+      const peek = document.createElement('div'); peek.className = 'folder-peek';
+      list.slice(0, 4).forEach(photo => { const img = document.createElement('img'); img.src = photoUrl(photo); img.alt = ''; img.loading = 'lazy'; peek.append(img); });
+      peek.addEventListener('click', () => { openFolders.add(purpose.id); renderPhotos(); });
+      folder.append(peek);
+    }
+    if (isOpen) {
+      const body = document.createElement('div'); body.className = 'folder-body';
+      const actions = document.createElement('div'); actions.className = 'folder-actions';
+      if (list.length) actions.append(button(`이 목적 ${Math.min(list.length, MAX_SHARE)}장 선택`, () => {
+        const ids = list.slice(0, MAX_SHARE).map(p => p.id);
+        selected.clear(); ids.forEach(id => selected.add(id)); renderPhotos();
+        shareStatus(`“${purpose.name}” 사진 ${ids.length}장을 골랐어요. 아래 보내기에서 앱을 누르세요.`);
+      }));
+      if (purpose.id && purpose.id !== current) actions.append(button('이 목적으로 찍기', () => selectPurpose(purpose.id), 'accent'));
+      if (actions.children.length) body.append(actions);
+      if (list.length) body.append(dayGroups(list, false));
+      else { const p = document.createElement('p'); p.className = 'empty'; p.textContent = '이 목적으로 찍은 사진이 없어요.'; body.append(p); }
+      folder.append(body);
+    }
+    frag.append(folder);
+  });
+  return frag;
+}
+
+// 날짜별: 모든 사진을 날짜순으로. 사진마다 어느 목적인지 이름표가 붙어요.
+function dateView() {
+  const wrap = document.createElement('div'); wrap.className = 'date-group';
+  wrap.append(dayGroups([...photos].sort(newestFirst), true));
+  return wrap;
+}
+
 function renderPhotos() {
   urls.forEach(url => URL.revokeObjectURL(url)); urls = [];
-  $('photos').replaceChildren();
-  const shown = shownPhotos();
-  [...selected].forEach(id => { if (!shown.some(photo => photo.id === id)) selected.delete(id); });
-  $('album-count').textContent = `${shown.length}장`;
-  $('empty').hidden = !!shown.length;
-  $('empty').textContent = current ? '이 목적으로 찍은 사진이 없어요.' : '목적을 저장하고 사진을 찍어 보세요.';
+  [...selected].forEach(id => { if (!photos.some(photo => photo.id === id)) selected.delete(id); });
+  document.querySelectorAll('.view-tab').forEach(tab => tab.setAttribute('aria-selected', String(tab.dataset.view === view)));
+  $('album-count').textContent = `전체 ${photos.length}장`;
+  $('empty').hidden = view === 'purpose' ? purposes.length > 0 || photos.length > 0 : photos.length > 0;
+  $('empty').textContent = purposes.length ? '아직 찍은 사진이 없어요.' : '맨 위에 목적을 입력하고 사진을 찍어 보세요.';
+  $('album').replaceChildren(view === 'purpose' ? folderView() : dateView());
   const total = photos.reduce((sum, photo) => sum + photo.blob.size, 0);
   $('storage-info').textContent = photos.length ? `이 휴대폰에 ${photos.length}장, ${sizeLabel(total)} 보관 중 · 보낸 사진은 지워서 공간을 비워 주세요.` : '';
-  shown.forEach(photo => {
-    const card = document.createElement('article'); card.className = selected.has(photo.id) ? 'photo selected' : 'photo';
-    const open = document.createElement('button'); open.type = 'button'; open.className = 'photo-open';
-    open.setAttribute('aria-label', `${dateLabel(photo.created)} 사진 크게 보기`);
-    const image = document.createElement('img'); const url = URL.createObjectURL(photo.blob); urls.push(url);
-    image.src = url; image.alt = ''; image.loading = 'lazy'; open.append(image);
-    open.addEventListener('click', () => {
-      largeUrl = URL.createObjectURL(photo.blob); $('large-photo').src = largeUrl;
-      $('large-caption').textContent = `${currentPurpose()?.name || ''} · ${dateLabel(photo.created)} · ${sizeLabel(photo.blob.size)}`;
-      $('photo-dialog').showModal();
-    });
-    const label = document.createElement('label');
-    const checkbox = document.createElement('input'); checkbox.type = 'checkbox'; checkbox.checked = selected.has(photo.id);
-    checkbox.setAttribute('aria-label', `${dateLabel(photo.created)} 사진 선택`);
-    checkbox.addEventListener('change', () => {
-      if (checkbox.checked && selected.size >= MAX_SHARE) { checkbox.checked = false; notice(`한 번에 최대 ${MAX_SHARE}장까지 고를 수 있어요.`, true); return; }
-      if (checkbox.checked) selected.add(photo.id); else selected.delete(photo.id);
-      card.classList.toggle('selected', checkbox.checked); controls();
-    });
-    label.append(checkbox);
-    const time = document.createElement('p'); time.className = 'photo-time'; time.textContent = dateLabel(photo.created);
-    card.append(open, label, time); $('photos').append(card);
-  });
   controls();
 }
+
+document.querySelectorAll('.view-tab').forEach(tab => tab.addEventListener('click', () => { view = tab.dataset.view; savePrefs(); renderPhotos(); }));
 
 function render() { renderPurposes(); renderPhotos(); }
 
 function selectPurpose(id) {
   if (busy) return;
-  current = id; selected.clear(); shotsThisSession = 0; $('shot-count').textContent = '0장';
+  current = id; shotsThisSession = 0; $('shot-count').textContent = '0장';
+  openFolders.add(id);
   savePrefs(); render();
   notice(`“${currentPurpose().name}” 목적으로 찍어요.`);
 }
@@ -317,7 +434,6 @@ document.addEventListener('visibilitychange', () => { if (document.hidden) stopC
 window.addEventListener('pagehide', stopCamera);
 
 /* ---------- 선택 ---------- */
-$('select-batch').addEventListener('click', () => { selected.clear(); shownPhotos().slice(0, 10).forEach(photo => selected.add(photo.id)); renderPhotos(); });
 $('clear-selection').addEventListener('click', () => { selected.clear(); renderPhotos(); });
 
 /* ---------- 보내기: 휴대폰 공유 화면을 열고, 고를 앱을 위에 크게 알려 줘요 ---------- */
@@ -344,9 +460,13 @@ function showFallback(reason) {
   shareStatus(reason, true);
 }
 
+// 파일 이름에 사진마다 자기 목적 이름을 붙여요. 받은 쪽(드라이브·PC)에서도 어느 목적 사진인지 바로 보여요.
 function photoFiles(picked) {
-  const name = safeName(currentPurpose()?.name || '업무사진');
-  return picked.map((photo, index) => new File([photo.blob], `${name}_${fileStamp(photo.created)}_${index + 1}.jpg`, { type:'image/jpeg', lastModified:photo.created }));
+  return picked.map((photo, index) => new File([photo.blob], `${safeName(purposeName(photo))}_${fileStamp(photo.created)}_${index + 1}.jpg`, { type:'image/jpeg', lastModified:photo.created }));
+}
+function pickedSummary(picked) {
+  const names = [...new Set(picked.map(purposeName))];
+  return names.length === 1 ? names[0] : `${names[0]} 외 ${names.length - 1}개 목적`;
 }
 
 $('open-chrome').addEventListener('click', () => {
@@ -371,10 +491,9 @@ document.querySelectorAll('.share').forEach(button => button.addEventListener('c
   if (busy) return;
   const target = TARGETS[button.dataset.target];
   const picked = selectedPhotos();
-  if (!picked.length) { shareStatus(shownPhotos().length ? '먼저 보낼 사진을 체크해 주세요. (사진 왼쪽 위 네모 칸, 또는 "최근 10장 선택")' : '보낼 사진이 없어요. 먼저 사진을 찍어 주세요.', true); return; }
+  if (!picked.length) { shareStatus(photos.length ? '먼저 보낼 사진을 체크해 주세요. (사진 왼쪽 위 네모 칸, 또는 목적 폴더를 펼쳐 "이 목적 선택")' : '보낼 사진이 없어요. 먼저 사진을 찍어 주세요.', true); return; }
   if (button.dataset.target === 'sms' && picked.length > MAX_SMS) { shareStatus(`문자는 한 번에 ${MAX_SMS}장까지 보내 주세요. 많으면 드라이브나 카카오톡이 좋아요.`, true); return; }
   const files = photoFiles(picked);
-  const name = safeName(currentPurpose()?.name || '업무사진');
   if (!navigator.share) {
     showFallback(IN_APP ? '카카오톡 등 앱 안에서 연 화면이라 보내기가 안 돼요. "크롬으로 열기"를 누르거나, 사진을 휴대폰에 저장해서 보내 주세요.' : '이 브라우저는 보내기를 지원하지 않아요. 휴대폰 크롬에서 열거나, 사진을 휴대폰에 저장해서 보내 주세요.');
     return;
@@ -386,8 +505,11 @@ document.querySelectorAll('.share').forEach(button => button.addEventListener('c
   const data = { files };
   // 이메일은 제목과 본문을 함께 넣어요. 카카오톡·문자에는 글을 넣으면 사진이 빠지는 경우가 있어서 사진만 보내요.
   if (target.withText) {
-    data.title = `[${name}] 사진 ${picked.length}장`;
-    data.text = `${name} 사진 ${picked.length}장\n${picked.map((photo, i) => `${i + 1}. ${dateLabel(photo.created)}`).join('\n')}`;
+    data.title = `[${pickedSummary(picked)}] 사진 ${picked.length}장`;
+    data.text = [...new Set(picked.map(purposeName))].map(name => {
+      const mine = picked.filter(photo => purposeName(photo) === name);
+      return `■ ${name} (${mine.length}장)\n${mine.map(photo => `- ${dayLabel(photo.created).replace(/^.* · /, '')} ${timeLabel(photo.created)}`).join('\n')}`;
+    }).join('\n\n');
   }
   busy = true; controls(); showHint(target.hint);
   try {
@@ -439,8 +561,13 @@ async function initialize() {
     db = await openDatabase();
     db.onversionchange = () => { db.close(); notice('보관함이 바뀌었어요. 화면을 새로 고쳐 주세요.', true); };
     [purposes, photos] = await Promise.all([readAll('purposes'), readAll('photos')]);
-    try { const prefs = JSON.parse(localStorage.getItem(PREF_KEY)); if (purposes.some(p => p.id === prefs?.current)) current = prefs.current; } catch { /* 설정이 없어도 괜찮아요. */ }
+    try {
+      const prefs = JSON.parse(localStorage.getItem(PREF_KEY));
+      if (purposes.some(p => p.id === prefs?.current)) current = prefs.current;
+      if (prefs?.view === 'date') view = 'date';
+    } catch { /* 설정이 없어도 괜찮아요. */ }
     if (!current && purposes.length) current = [...purposes].sort((a, b) => b.used - a.used)[0].id;
+    if (current) openFolders.add(current);
     render();
     notice(current ? `“${currentPurpose().name}” 목적이에요. 화면을 누르면 카메라가 켜져요.` : '맨 위에 촬영 목적을 입력하고 저장해 주세요.');
     if (IN_APP) { notice('카카오톡 등 앱 안에서 열었어요. 보내기가 안 될 수 있으니 크롬으로 열어 주세요. (⋮ 메뉴 → 다른 브라우저로 열기)', true); }
