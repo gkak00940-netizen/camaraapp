@@ -24,15 +24,20 @@ window.Relay = (() => {
   const items = box => fs.collection(db, 'boxes', box, 'items');
 
   // 휴대폰: 사진 한 장을 보내요. (purpose: 목적 이름 → PC에서 폴더 이름이 돼요)
-  async function send(box, { id, blob, created }, purpose, name) {
+  async function send(box, { id, blob, created }, purpose, name, onProgress) {
     await connect();
     const bytes = new Uint8Array(await blob.arrayBuffer());
     const parts = Math.max(1, Math.ceil(bytes.length / CHUNK));
     for (let part = 0; part < parts; part++) {
-      await fs.setDoc(fs.doc(items(box), `${id}_${part}`), {
-        photo:id, part, parts, purpose, name, created, sent:Date.now(),
-        data:fs.Bytes.fromUint8Array(bytes.subarray(part * CHUNK, (part + 1) * CHUNK)),
-      });
+      // 인터넷이 안 되거나 저장소가 준비되지 않으면 끝없이 기다리지 않고 30초 뒤 실패로 알려요.
+      await Promise.race([
+        fs.setDoc(fs.doc(items(box), `${id}_${part}`), {
+          photo:id, part, parts, purpose, name, created, sent:Date.now(),
+          data:fs.Bytes.fromUint8Array(bytes.subarray(part * CHUNK, (part + 1) * CHUNK)),
+        }),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 30000)),
+      ]);
+      onProgress?.(part + 1, parts);
     }
   }
 
@@ -55,7 +60,9 @@ window.Relay = (() => {
         working.add(id);
         try {
           parts.sort((a, b) => a.part - b.part);
-          const blob = new Blob(parts.map(p => p.data.toUint8Array()), { type:'image/jpeg' });
+          const ext = (parts[0].name.match(/\.(\w+)$/)?.[1] || 'jpg').toLowerCase();
+          const type = { mp4:'video/mp4', webm:'video/webm', mov:'video/quicktime', png:'image/png' }[ext] || 'image/jpeg';
+          const blob = new Blob(parts.map(p => p.data.toUint8Array()), { type });
           const saved = await onPhoto({ id, purpose:parts[0].purpose, name:parts[0].name, created:parts[0].created, blob });
           if (saved) await Promise.all(parts.map(p => fs.deleteDoc(p.ref)));
         } catch (error) { onError?.(error); }

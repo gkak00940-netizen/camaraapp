@@ -10,10 +10,10 @@
   <link rel="apple-touch-icon" href="icons/icon-192.png">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="업무 사진">
-  <link rel="stylesheet" href="style.css">
-  <script src="config.js" defer></script>
-  <script src="relay.js" defer></script>
-  <script src="app.js" defer></script>
+  <link rel="stylesheet" href="style.css?v=9">
+  <script src="config.js?v=9" defer></script>
+  <script src="relay.js?v=9" defer></script>
+  <script src="app.js?v=9" defer></script>
 </head>
 <body>
   <header class="top">
@@ -42,8 +42,8 @@
 
     <section class="card" aria-labelledby="album-title">
       <div class="heading"><h2 id="album-title">사진 보관함</h2><span id="album-count" class="count">0장</span></div>
-      <button type="button" id="import-photos" class="import-btn">＋ 받은 사진 가져오기</button>
-      <input type="file" id="import-input" accept="image/*" multiple hidden>
+      <button type="button" id="import-photos" class="import-btn">＋ 받은 사진·영상 가져오기</button>
+      <input type="file" id="import-input" accept="image/*,video/*" multiple hidden>
       <div class="view-tabs" role="tablist" aria-label="사진 보기 방식">
         <button type="button" role="tab" class="view-tab" data-view="purpose" aria-selected="true">목적별</button>
         <button type="button" role="tab" class="view-tab" data-view="date" aria-selected="false">날짜별</button>
@@ -62,6 +62,7 @@
       <strong id="selection-count">0장 선택</strong>
       <button type="button" id="clear-selection" class="small">선택 해제</button>
     </div>
+    <p id="size-note" class="size-note" role="status"></p>
     <div class="send-box" role="group" aria-labelledby="send-title">
       <p class="send-title" id="send-title"><span class="send-arrow" aria-hidden="true">↗</span> 보내기 <span class="send-sub">보낼 곳을 누르세요</span></p>
       <button type="button" id="send-pc" class="send-pc" hidden><span class="pc-icon" aria-hidden="true">🖥</span><span><b id="send-pc-label">회사 PC로 보내기</b><small>PC에 목적별 폴더로 저장돼요</small></span></button>
@@ -89,14 +90,19 @@
     <span id="flash" class="flash" aria-hidden="true"></span>
     <div class="cam-top"><span id="cam-purpose" class="cam-purpose"></span><button type="button" id="stop-camera" class="cam-close" aria-label="카메라 닫기">✕</button></div>
     <p id="cam-toast" class="cam-toast" role="status" hidden></p>
+    <p id="rec-timer" class="rec-timer" hidden><span class="rec-dot" aria-hidden="true"></span><span id="rec-time">00:00</span><small id="rec-size"></small></p>
     <div class="cam-bottom">
+      <div class="cam-modes" role="radiogroup" aria-label="촬영 종류">
+        <button type="button" class="cam-mode" data-mode="photo" role="radio" aria-checked="true">사진</button>
+        <button type="button" class="cam-mode" data-mode="video" role="radio" aria-checked="false">동영상</button>
+      </div>
       <span class="cam-side"><img id="last-shot" class="last-shot" alt="" hidden></span>
       <button type="button" id="capture" class="shutter" aria-label="사진 찍기"><span></span></button>
       <span id="shot-count" class="cam-side shot-count">0장</span>
     </div>
   </div>
 
-  <dialog id="photo-dialog"><div class="dialog-top"><p id="large-caption"></p><button type="button" id="close-photo">닫기</button></div><img id="large-photo" alt="크게 본 사진"></dialog>
+  <dialog id="photo-dialog"><div class="dialog-top"><p id="large-caption"></p><button type="button" id="close-photo">닫기</button></div><img id="large-photo" alt="크게 본 사진"><video id="large-video" controls playsinline hidden></video></dialog>
   <!-- 받은 사진을 어느 목적에 넣을지 고르기 -->
   <dialog id="import-dialog" aria-labelledby="import-title">
     <h2 id="import-title">사진을 어느 목적에 넣을까요?</h2>

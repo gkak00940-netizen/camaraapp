@@ -5,6 +5,10 @@ const DB_NAME = 'work-photos-v1';
 const PREF_KEY = 'work-photos-prefs-v1';
 const MAX_SHARE = 20;
 const MAX_SMS = 10;
+// 내보내기 용량 기준 (보내는 곳마다 한도가 달라요)
+const SMS_LIMIT = 1 * 1024 * 1024;     // 문자(MMS): 통신사 기준 대략 1MB 안팎 → 사진 몇 장만, 영상은 불가
+const EMAIL_LIMIT = 25 * 1024 * 1024;  // 메일 첨부: Gmail 기준 25MB (넘으면 드라이브 링크로 바뀜)
+const BIG_SEND = 100 * 1024 * 1024;    // 한 번에 100MB가 넘으면 와이파이에서 보내기를 권해요
 const $ = id => document.getElementById(id);
 
 let db;
@@ -87,6 +91,22 @@ const newestFirst = (a, b) => b.created - a.created;
 const purposePhotos = id => photos.filter(photo => photo.purpose === id).sort(newestFirst);
 const selectedPhotos = () => photos.filter(photo => selected.has(photo.id)).sort(newestFirst);
 
+const totalSize = list => list.reduce((sum, item) => sum + item.blob.size, 0);
+
+// 고른 사진·영상의 합계 용량과, 그 크기로 어디에 보내기 좋은지 한 줄로 알려 줘요.
+function sizeAdvice(list) {
+  const note = $('size-note'); if (!note) return;
+  if (!list.length) { note.textContent = ''; return; }
+  const total = totalSize(list); const hasVideo = list.some(item => item.kind === 'video');
+  let text = `합계 ${sizeLabel(total)} · `; let warn = false;
+  if (total > BIG_SEND) { text += '아주 커요. 와이파이에서 드라이브나 회사 PC로 보내세요.'; warn = true; }
+  else if (total > EMAIL_LIMIT) { text += '메일 첨부(25MB)보다 커요. 드라이브·카톡·회사 PC가 좋아요.'; warn = true; }
+  else if (hasVideo) text += '문자로는 영상을 못 보내요. 나머지는 모두 괜찮아요.';
+  else if (total > SMS_LIMIT) text += '문자는 화질이 줄 수 있어요. 나머지는 모두 괜찮아요.';
+  else text += '어디로든 보낼 수 있어요.';
+  note.textContent = text; note.className = warn ? 'size-note warn' : 'size-note';
+}
+
 function controls() {
   const count = selectedPhotos().length;
   // 사진을 하나라도 고르면 화면 아래에 보내기·삭제 바가 바로 나와요. (스크롤 안 내려도 돼요)
@@ -95,7 +115,9 @@ function controls() {
   document.body.classList.toggle('has-bar', !!count);
   if (!count) { $('share-status').hidden = true; $('share-fallback').hidden = true; }
   else if (wasHidden) { $('share-status').hidden = true; $('share-fallback').hidden = true; }
-  $('selection-count').textContent = `${count}장 선택`;
+  const pickedNow = selectedPhotos();
+  $('selection-count').textContent = `${countLabel(pickedNow)} 선택`;
+  sizeAdvice(pickedNow);
   document.querySelectorAll('.share').forEach(button => { button.disabled = busy; });
   $('save-photos').disabled = busy || !count;
   $('delete-selected').disabled = busy || !count;
@@ -133,7 +155,7 @@ function renderList(filter = '') {
   const shown = [...purposes].sort((a, b) => b.used - a.used).filter(p => !typed || p.name.includes(typed));
   shown.forEach(purpose => {
     const active = purpose.id === current;
-    const item = listItem(active ? 'active' : '', [span('check', active ? '✓' : ''), span('name', purpose.name), span('count', `${purposePhotos(purpose.id).length}장`)],
+    const item = listItem(active ? 'active' : '', [span('check', active ? '✓' : ''), span('name', purpose.name), span('count', countLabel(purposePhotos(purpose.id)))],
       () => { closeList(); selectPurpose(purpose.id); },
       () => { closeList(); askDeletePurpose(purpose); },
       () => { closeList(); askRename(purpose); });
@@ -193,7 +215,17 @@ function purposeColor(id) {
   return order < 0 ? '#9aa4b2' : COLORS[order % COLORS.length];
 }
 function shortDay(value) { const d = new Date(value); return `${d.getMonth() + 1}/${d.getDate()}`; }
-function photoUrl(photo) { const url = URL.createObjectURL(photo.blob); urls.push(url); return url; }
+// 목록에 보일 그림: 사진은 사진 그대로, 영상은 대표 사진(첫 장면). 대표 사진이 없으면 빈 칸.
+function photoUrl(photo) {
+  const source = photo.kind === 'video' ? photo.poster : photo.blob;
+  if (!source) return '';
+  const url = URL.createObjectURL(source); urls.push(url); return url;
+}
+// "사진 3 · 영상 2" 처럼 세어요. 사진만 있으면 "3장".
+function countLabel(list) {
+  const v = list.filter(item => item.kind === 'video').length, p = list.length - v;
+  return v ? (p ? `사진 ${p} · 영상 ${v}` : `영상 ${v}개`) : `${p}장`;
+}
 
 function groupByDay(list) {
   const groups = [];
@@ -211,11 +243,15 @@ function toggleSelect(photo, on, card) {
 function photoCard(photo, { tag }) {
   const card = document.createElement('article'); card.className = selected.has(photo.id) ? 'photo selected' : 'photo';
   const open = document.createElement('button'); open.type = 'button'; open.className = 'photo-open';
-  open.setAttribute('aria-label', `${purposeName(photo)} ${dateLabel(photo.created)} 사진 크게 보기`);
-  const image = document.createElement('img'); image.src = photoUrl(photo); image.alt = ''; image.loading = 'lazy'; open.append(image);
+  const video = photo.kind === 'video';
+  open.setAttribute('aria-label', `${purposeName(photo)} ${dateLabel(photo.created)} ${video ? '영상 보기' : '사진 크게 보기'}`);
+  const image = document.createElement('img'); const src = photoUrl(photo); if (src) image.src = src; image.alt = ''; image.loading = 'lazy'; open.append(image);
+  if (video) { const play = document.createElement('span'); play.className = 'photo-video'; play.textContent = '▶'; card.append(play); }
   open.addEventListener('click', () => {
-    largeUrl = URL.createObjectURL(photo.blob); $('large-photo').src = largeUrl;
-    $('large-caption').textContent = `${purposeName(photo)} · ${dayLabel(photo.created).replace(/^.* · /, '')} ${timeLabel(photo.created)} · ${sizeLabel(photo.blob.size)}`;
+    largeUrl = URL.createObjectURL(photo.blob);
+    $('large-photo').hidden = video; $('large-video').hidden = !video;
+    if (video) { $('large-video').src = largeUrl; $('large-video').play().catch(() => {}); } else $('large-photo').src = largeUrl;
+    $('large-caption').textContent = `${purposeName(photo)} · ${dayLabel(photo.created).replace(/^.* · /, '')} ${timeLabel(photo.created)}${video ? ` · ${durLabel(photo.duration || 0)}` : ''} · ${sizeLabel(photo.blob.size)}`;
     $('photo-dialog').showModal();
   });
   const label = document.createElement('label');
@@ -231,6 +267,7 @@ function photoCard(photo, { tag }) {
     time.append(name, document.createTextNode(timeLabel(photo.created)));
     card.style.setProperty('--dot', purposeColor(photo.purpose)); card.classList.add('tagged');
   } else time.textContent = timeLabel(photo.created);
+  if (video) { const d = document.createElement('span'); d.className = 'photo-dur'; d.textContent = durLabel(photo.duration || 0); time.append(d); }
   card.append(open, label, time);
   if (photo.received) { const r = document.createElement('span'); r.className = 'photo-recv'; r.textContent = '받음'; card.append(r); }
   if (photo.pcSent) { const s = document.createElement('span'); s.className = 'photo-pc'; s.textContent = 'PC✓'; s.title = 'PC로 보냄'; card.append(s); }
@@ -241,7 +278,7 @@ function dayGroups(list, tag) {
   const frag = document.createDocumentFragment();
   groupByDay(list).forEach(group => {
     const head = document.createElement('h3'); head.className = 'day'; head.textContent = dayLabel(group.items[0].created) + ' ';
-    const n = document.createElement('span'); n.textContent = `${group.items.length}장`; head.append(n);
+    const n = document.createElement('span'); n.textContent = countLabel(group.items); head.append(n);
     const grid = document.createElement('div'); grid.className = 'photos';
     group.items.forEach(photo => grid.append(photoCard(photo, { tag })));
     frag.append(head, grid);
@@ -265,7 +302,7 @@ function folderView() {
     folder.style.setProperty('--dot', purposeColor(purpose.id)); folder.dataset.id = purpose.id;
     const name = document.createElement('span'); name.className = 'folder-name'; name.textContent = purpose.name;
     if (purpose.id === current) { const now = document.createElement('span'); now.className = 'now'; now.textContent = '촬영 중'; name.append(now); }
-    const count = document.createElement('span'); count.className = 'folder-count'; count.textContent = `${list.length}장`;
+    const count = document.createElement('span'); count.className = 'folder-count'; count.textContent = countLabel(list);
     const meta = document.createElement('span'); meta.className = 'folder-meta';
     // 예: "11/14 ~ 11/16 (오늘) · 2일 촬영"
     meta.textContent = !list.length ? '아직 사진이 없어요' : (() => {
@@ -278,7 +315,7 @@ function folderView() {
     folder.append(head);
     if (!isOpen && list.length) {
       const peek = document.createElement('div'); peek.className = 'folder-peek';
-      list.slice(0, 4).forEach(photo => { const img = document.createElement('img'); img.src = photoUrl(photo); img.alt = ''; img.loading = 'lazy'; peek.append(img); });
+      list.slice(0, 4).forEach(photo => { const wrap = document.createElement('span'); wrap.className = photo.kind === 'video' ? 'peek' : ''; const img = document.createElement('img'); const src = photoUrl(photo); if (src) img.src = src; img.alt = ''; img.loading = 'lazy'; wrap.append(img); peek.append(wrap); });
       peek.addEventListener('click', () => { openFolders.add(purpose.id); renderPhotos(); });
       folder.append(peek);
     }
@@ -314,12 +351,12 @@ function renderPhotos() {
   urls.forEach(url => URL.revokeObjectURL(url)); urls = [];
   [...selected].forEach(id => { if (!photos.some(photo => photo.id === id)) selected.delete(id); });
   document.querySelectorAll('.view-tab').forEach(tab => tab.setAttribute('aria-selected', String(tab.dataset.view === view)));
-  $('album-count').textContent = `전체 ${photos.length}장`;
+  $('album-count').textContent = `전체 ${countLabel(photos)}`;
   $('empty').hidden = view === 'purpose' ? purposes.length > 0 || photos.length > 0 : photos.length > 0;
   $('empty').textContent = purposes.length ? '아직 찍은 사진이 없어요.' : '맨 위에 목적을 입력하고 사진을 찍어 보세요.';
   $('album').replaceChildren(view === 'purpose' ? folderView() : dateView());
   const total = photos.reduce((sum, photo) => sum + photo.blob.size, 0);
-  $('storage-info').textContent = photos.length ? `이 휴대폰에 ${photos.length}장, ${sizeLabel(total)} 보관 중 · 보낸 사진은 지워서 공간을 비워 주세요.` : '';
+  $('storage-info').textContent = photos.length ? `이 휴대폰에 ${countLabel(photos)}, ${sizeLabel(total)} 보관 중 · 보낸 사진은 지워서 공간을 비워 주세요.` : '';
   controls();
 }
 
@@ -379,6 +416,9 @@ function camToast(text, error = false) {
 let lastShotUrl = '';
 function stopCamera() {
   cameraRequest++; pendingCamera = false;
+  // 녹화 중에 닫히면(뒤로 가기·전화 등) 그때까지 찍은 영상을 저장해요.
+  if (recorder?.state === 'recording') stopRecording();
+  audioStream?.getTracks().forEach(track => track.stop()); audioStream = null;
   stream?.getTracks().forEach(track => track.stop()); stream = null;
   $('camera').srcObject = null;
   if ($('camera-screen').hidden) { controls(); return; }
@@ -398,7 +438,7 @@ async function startCamera() {
   $('camera-screen').requestFullscreen?.({ navigationUI:'hide' }).catch(() => {});
   if (!history.state?.camera) history.pushState({ camera:true }, '');
   $('cam-purpose').textContent = currentPurpose().name;
-  shotsThisSession = 0; $('shot-count').textContent = '0장';
+  shotsThisSession = 0; videosThisSession = 0; updateShotCount(); setMode(camMode, false);
   $('last-shot').hidden = !lastShotUrl;
   const requestId = ++cameraRequest;
   pendingCamera = true; controls();
@@ -407,6 +447,7 @@ async function startCamera() {
     if (requestId !== cameraRequest || document.hidden) { opened.getTracks().forEach(track => track.stop()); return; }
     stream = opened; $('camera').srcObject = stream;
     await $('camera').play();
+    if (camMode === 'video') applyModeConstraints();
   } catch (error) {
     stopCamera();
     notice(error.name === 'NotAllowedError' ? '카메라 권한이 필요해요. 크롬 주소창 왼쪽 아이콘 → 권한에서 카메라를 허용해 주세요.' : error.name === 'NotFoundError' ? '카메라를 찾지 못했어요.' : '카메라를 켜지 못했어요. 다른 앱의 카메라를 닫고 다시 눌러 주세요.', true);
@@ -428,7 +469,7 @@ async function capture() {
     const purpose = { ...currentPurpose(), used:Date.now() };
     await write(['photos', 'purposes'], t => { t.objectStore('photos').add(photo); t.objectStore('purposes').put(purpose); });
     photos.push(photo); purposes = purposes.map(p => p.id === purpose.id ? purpose : p);
-    shotsThisSession++; $('shot-count').textContent = `${shotsThisSession}장`;
+    shotsThisSession++; updateShotCount();
     if (lastShotUrl) URL.revokeObjectURL(lastShotUrl);
     lastShotUrl = URL.createObjectURL(blob); $('last-shot').src = lastShotUrl; $('last-shot').hidden = false;
     camToast('저장됨');
@@ -437,11 +478,149 @@ async function capture() {
   finally { busy = false; render(); }
 }
 
+/* ---------- 동영상: 카메라 화면에서 "동영상"으로 바꾸고 빨간 버튼으로 녹화 시작/멈춤 ---------- */
+// 용량 기준: 720p(1280×720) · 영상 약 2.5Mbps + 소리 96kbps → 1분에 약 19MB. 한 번에 최대 5분(약 95MB).
+const VIDEO_BPS = 2_500_000;
+const AUDIO_BPS = 96_000;
+const MAX_RECORD_SEC = 300;
+let camMode = 'photo';
+let recorder = null;
+let audioStream = null;
+let recChunks = [];
+let recStarted = 0;
+let recTimer = 0;
+let videosThisSession = 0;
+
+const isVideo = item => item.kind === 'video';
+const durLabel = sec => `${Math.floor(sec / 60)}:${pad(Math.round(sec % 60))}`;
+function updateShotCount() {
+  $('shot-count').textContent = videosThisSession ? `사진 ${shotsThisSession} · 영상 ${videosThisSession}` : `${shotsThisSession}장`;
+}
+
+// 휴대폰이 지원하는 녹화 형식 중 PC·카톡에서 잘 열리는 MP4를 먼저 골라요. 안 되면 WebM.
+function pickVideoType() {
+  const types = ['video/mp4;codecs=avc1.42E01E,mp4a.40.2', 'video/mp4;codecs=avc1,mp4a', 'video/mp4', 'video/webm;codecs=vp9,opus', 'video/webm;codecs=vp8,opus', 'video/webm'];
+  return types.find(type => window.MediaRecorder?.isTypeSupported?.(type)) || '';
+}
+
+function applyModeConstraints() {
+  const track = stream?.getVideoTracks()[0]; if (!track?.applyConstraints) return;
+  const wanted = camMode === 'video'
+    ? { facingMode:{ ideal:'environment' }, width:{ ideal:1280 }, height:{ ideal:720 }, frameRate:{ ideal:30 } }
+    : { facingMode:{ ideal:'environment' }, width:{ ideal:2560 }, height:{ ideal:1920 } };
+  track.applyConstraints(wanted).catch(() => { /* 안 되면 지금 화질 그대로 찍어요 */ });
+}
+
+function setMode(mode, apply = true) {
+  if (recorder) return;
+  camMode = mode;
+  document.querySelectorAll('.cam-mode').forEach(b => b.setAttribute('aria-checked', String(b.dataset.mode === mode)));
+  $('camera-screen').classList.toggle('video-mode', mode === 'video');
+  $('capture').setAttribute('aria-label', mode === 'video' ? '녹화 시작' : '사진 찍기');
+  if (apply) { applyModeConstraints(); camToast(mode === 'video' ? '동영상 · 빨간 버튼으로 녹화 시작' : '사진'); }
+}
+document.querySelectorAll('.cam-mode').forEach(b => b.addEventListener('click', () => setMode(b.dataset.mode)));
+
+async function startRecording() {
+  if (!stream || recorder || busy || !current) return;
+  if (!window.MediaRecorder) { camToast('이 휴대폰 브라우저는 동영상 녹화를 지원하지 않아요.', true); return; }
+  // 소리: 처음 한 번 마이크 허락을 물어봐요. 거절하면 소리 없이 녹화해요.
+  if (!audioStream) {
+    try { audioStream = await navigator.mediaDevices.getUserMedia({ audio:{ echoCancellation:true, noiseSuppression:true } }); }
+    catch { audioStream = null; camToast('마이크 허락이 없어 소리 없이 녹화해요.', true); }
+  }
+  if (!stream) return;
+  const type = pickVideoType();
+  const mixed = new MediaStream([...stream.getVideoTracks(), ...(audioStream?.getAudioTracks() || [])]);
+  try { recorder = new MediaRecorder(mixed, { mimeType:type || undefined, videoBitsPerSecond:VIDEO_BPS, audioBitsPerSecond:AUDIO_BPS }); }
+  catch { camToast('녹화를 시작하지 못했어요. 카메라를 껐다 켜 주세요.', true); return; }
+  recChunks = []; let bytes = 0;
+  const purposeId = current;
+  recorder.ondataavailable = event => { if (event.data.size) { recChunks.push(event.data); bytes += event.data.size; $('rec-size').textContent = sizeLabel(bytes); } };
+  recorder.onstop = () => saveVideo(recChunks, recorder?.mimeType || type || 'video/webm', (Date.now() - recStarted) / 1000, purposeId);
+  recorder.start(1000);
+  recStarted = Date.now();
+  $('camera-screen').classList.add('recording'); $('rec-timer').hidden = false; $('rec-size').textContent = '';
+  $('capture').setAttribute('aria-label', '녹화 멈추기');
+  const tick = () => {
+    const sec = (Date.now() - recStarted) / 1000;
+    $('rec-time').textContent = `${pad(Math.floor(sec / 60))}:${pad(Math.floor(sec % 60))}`;
+    if (sec >= MAX_RECORD_SEC) { stopRecording(); camToast('5분이 넘어 녹화를 멈추고 저장했어요. 이어서 찍으려면 다시 누르세요.'); }
+  };
+  tick(); recTimer = setInterval(tick, 500);
+}
+
+function stopRecording() {
+  if (!recorder) return;
+  clearInterval(recTimer);
+  if (recorder.state !== 'inactive') recorder.stop();
+  $('camera-screen').classList.remove('recording'); $('rec-timer').hidden = true;
+  $('capture').setAttribute('aria-label', '녹화 시작');
+}
+
+// 영상에서 대표 사진(첫 장면)과 길이·크기를 뽑아요. 목록에서 미리보기로 써요.
+function videoInfo(blob, fallbackSec = 0) {
+  return new Promise(resolve => {
+    const v = document.createElement('video'); const url = URL.createObjectURL(blob);
+    let done = false;
+    const finish = async () => {
+      if (done) return; done = true;
+      let poster = null;
+      try {
+        if (v.videoWidth) {
+          const ratio = Math.min(1, 480 / Math.max(v.videoWidth, v.videoHeight));
+          const canvas = document.createElement('canvas'); canvas.width = Math.round(v.videoWidth * ratio); canvas.height = Math.round(v.videoHeight * ratio);
+          canvas.getContext('2d').drawImage(v, 0, 0, canvas.width, canvas.height);
+          poster = await new Promise(r => canvas.toBlob(r, 'image/jpeg', 0.75));
+        }
+      } catch { poster = null; }
+      const duration = Number.isFinite(v.duration) && v.duration > 0 ? v.duration : fallbackSec;
+      resolve({ poster, duration, width:v.videoWidth || 0, height:v.videoHeight || 0 });
+      URL.revokeObjectURL(url);
+    };
+    v.muted = true; v.playsInline = true; v.preload = 'auto';
+    v.addEventListener('loadeddata', () => { try { v.currentTime = Math.min(0.3, (Number.isFinite(v.duration) ? v.duration : 1) / 2); } catch { finish(); } });
+    v.addEventListener('seeked', finish);
+    v.addEventListener('error', finish);
+    setTimeout(finish, 4000);
+    v.src = url;
+  });
+}
+
+async function saveVideo(chunks, type, seconds, purposeId) {
+  recorder = null;
+  const blob = new Blob(chunks, { type:type.split(';')[0] });
+  if (!blob.size) { camToast('영상이 비어 있어서 저장하지 않았어요.', true); return; }
+  try {
+    const info = await videoInfo(blob, seconds);
+    const item = { id:crypto.randomUUID(), kind:'video', purpose:purposeId, created:Date.now() - Math.round(seconds * 1000), blob, mime:blob.type,
+      poster:info.poster, duration:info.duration || seconds, width:info.width, height:info.height };
+    const purpose = { ...purposes.find(p => p.id === purposeId), used:Date.now() };
+    await write(['photos', 'purposes'], t => { t.objectStore('photos').add(item); t.objectStore('purposes').put(purpose); });
+    photos.push(item); purposes = purposes.map(p => p.id === purpose.id ? purpose : p);
+    navigator.storage?.persist?.().catch(() => {}); // 휴대폰이 공간 부족할 때 앱 자료를 함부로 지우지 않게 부탁해요
+    videosThisSession++; updateShotCount();
+    if (info.poster) { if (lastShotUrl) URL.revokeObjectURL(lastShotUrl); lastShotUrl = URL.createObjectURL(info.poster); $('last-shot').src = lastShotUrl; $('last-shot').hidden = false; }
+    camToast(`영상 저장됨 · ${durLabel(item.duration)} · ${sizeLabel(blob.size)}`);
+    notice(`“${purpose.name}”에 영상을 저장했어요. (${durLabel(item.duration)}, ${sizeLabel(blob.size)})`);
+  } catch { camToast('영상을 저장하지 못했어요. 휴대폰 저장 공간을 확인해 주세요.', true); notice('영상을 저장하지 못했어요. 휴대폰 저장 공간을 확인해 주세요.', true); }
+  finally { render(); }
+}
+
+function shutter() {
+  if (camMode === 'video') { if (recorder) stopRecording(); else startRecording(); }
+  else capture();
+}
+
 $('viewfinder').addEventListener('click', startCamera);
-$('capture').addEventListener('click', capture);
-$('camera').addEventListener('click', capture);
+$('capture').addEventListener('click', shutter);
+// 화면 터치로 찍기는 사진일 때만. (녹화 중 실수로 멈추지 않게)
+$('camera').addEventListener('click', () => { if (camMode === 'photo') capture(); });
 $('camera').addEventListener('loadeddata', controls);
-$('stop-camera').addEventListener('click', () => { stopCamera(); notice(`사진 ${shotsThisSession}장을 찍었어요. 다시 찍으려면 검은 칸을 눌러 주세요.`); });
+$('stop-camera').addEventListener('click', () => {
+  stopCamera();
+  notice(`${videosThisSession ? `사진 ${shotsThisSession}장, 영상 ${videosThisSession}개` : `사진 ${shotsThisSession}장`}을 찍었어요. 다시 찍으려면 검은 칸을 눌러 주세요.`);
+});
 // 휴대폰 뒤로 가기 또는 전체 화면이 풀리면 카메라를 닫아요.
 window.addEventListener('popstate', () => { if (!$('camera-screen').hidden) stopCamera(); });
 document.addEventListener('fullscreenchange', () => { if (!document.fullscreenElement && !$('camera-screen').hidden && !pendingCamera) stopCamera(); });
@@ -480,7 +659,8 @@ $('send-pc').addEventListener('click', async () => {
   try {
     for (const photo of picked) {
       shareStatus(`${link.name}로 보내는 중… ${done + 1} / ${picked.length}`);
-      await Relay.send(link.box, photo, purposeName(photo), photoFiles([photo])[0].name.replace(/_1\.jpg$/, '.jpg'));
+      await Relay.send(link.box, photo, purposeName(photo), photoFiles([photo])[0].name.replace(/_1(\.\w+)$/, '$1'),
+        (part, parts) => { if (parts > 1) shareStatus(`${link.name}로 보내는 중… ${done + 1} / ${picked.length} (${Math.round(part / parts * 100)}%)`); });
       done++;
       const updated = { ...photo, pcSent:Date.now() };
       await write('photos', t => t.objectStore('photos').put(updated));
@@ -488,7 +668,7 @@ $('send-pc').addEventListener('click', async () => {
     }
     renderPhotos();
     // 선택은 그대로 둬서, PC에서 확인한 뒤 바로 아래 "삭제"로 휴대폰 공간을 비울 수 있게 해요.
-    shareStatus(`${link.name}로 ${done}장을 보냈어요. PC 받기 앱이 켜져 있으면 바로 목적별 폴더에 저장돼요. (꺼져 있으면 다음에 켤 때 저장돼요)`);
+    shareStatus(`${link.name}로 ${done}개를 보냈어요. PC 받기 앱이 켜져 있으면 바로 목적별 폴더에 저장돼요. (꺼져 있으면 다음에 켤 때 저장돼요)`);
   } catch (error) {
     shareStatus(`${done ? `${done}장은 보냈지만, ` : ''}PC로 보내지 못했어요. 인터넷 연결을 확인하고 다시 눌러 주세요.${error?.message === 'not-configured' ? ' (중계 설정 없음)' : ''}`, true);
   } finally { busy = false; controls(); renderPhotos(); }
@@ -499,7 +679,7 @@ let renaming = null;
 function askRename(purpose) {
   if (busy || !purpose) return;
   renaming = purpose;
-  $('rename-old').textContent = `지금 이름: ${purpose.name} · 사진 ${purposePhotos(purpose.id).length}장`;
+  $('rename-old').textContent = `지금 이름: ${purpose.name} · ${countLabel(purposePhotos(purpose.id))}`;
   $('rename-input').value = purpose.name; $('rename-status').textContent = '';
   $('rename-dialog').showModal(); $('rename-input').select();
 }
@@ -543,10 +723,11 @@ function openImportDialog(files) {
   importFiles = files;
   importUrls.forEach(url => URL.revokeObjectURL(url)); importUrls = [];
   $('import-preview').replaceChildren(...files.slice(0, 12).map(file => {
-    const img = document.createElement('img'); const url = URL.createObjectURL(file); importUrls.push(url);
-    img.src = url; img.alt = ''; return img;
+    const isVid = file.type.startsWith('video/');
+    const el = document.createElement(isVid ? 'video' : 'img'); const url = URL.createObjectURL(file); importUrls.push(url);
+    el.src = url; if (isVid) { el.muted = true; el.preload = 'metadata'; el.className = 'import-vid'; } else el.alt = ''; return el;
   }));
-  $('import-title').textContent = `사진 ${files.length}장을 어느 목적에 넣을까요?`;
+  $('import-title').textContent = `받은 ${files.length}개를 어느 목적에 넣을까요?`;
   const pick = importTarget || current;
   const list = [...purposes].sort((a, b) => b.used - a.used);
   $('import-purposes').replaceChildren(...list.map(purpose => {
@@ -554,7 +735,7 @@ function openImportDialog(files) {
     const radio = document.createElement('input'); radio.type = 'radio'; radio.name = 'import-purpose'; radio.value = purpose.id; radio.checked = purpose.id === pick;
     radio.addEventListener('change', () => { $('import-new-name').value = ''; });
     const dot = document.createElement('span'); dot.className = 'dot'; dot.style.background = purposeColor(purpose.id);
-    const n = document.createElement('span'); n.className = 'n'; n.textContent = `${purposePhotos(purpose.id).length}장`;
+    const n = document.createElement('span'); n.className = 'n'; n.textContent = countLabel(purposePhotos(purpose.id));
     label.append(radio, dot, document.createTextNode(purpose.name), n); return label;
   }));
   $('import-new-name').value = '';
@@ -602,6 +783,13 @@ $('confirm-import').addEventListener('click', async () => {
     const added = []; let skipped = 0; const received = Date.now();
     for (const [index, file] of importFiles.entries()) {
       $('import-status').textContent = `사진 넣는 중… ${index + 1} / ${importFiles.length}`;
+      // 영상은 그대로 넣고 대표 사진만 뽑아요. 사진은 큰 것만 줄여요.
+      if (file.type.startsWith('video/') || /\.(mp4|webm|mov|m4v|3gp)$/i.test(file.name)) {
+        const info = await videoInfo(file);
+        added.push({ id:crypto.randomUUID(), kind:'video', purpose:purposeId, created:file.lastModified || received, received, blob:file, mime:file.type || 'video/mp4',
+          poster:info.poster, duration:info.duration, width:info.width, height:info.height });
+        continue;
+      }
       const image = await shrinkImage(file);
       if (!image) { skipped++; continue; }
       added.push({ id:crypto.randomUUID(), purpose:purposeId, created:file.lastModified || received, received, blob:image.blob, width:image.width, height:image.height });
@@ -611,7 +799,7 @@ $('confirm-import').addEventListener('click', async () => {
     photos.push(...added); purposes = purposes.map(p => p.id === purpose.id ? purpose : p);
     $('import-dialog').close();
     openFolders.add(purposeId); view = 'purpose'; savePrefs();
-    notice(`“${purpose.name}”에 받은 사진 ${added.length}장을 넣었어요.${skipped ? ` (${skipped}장은 열 수 없는 형식이라 뺐어요)` : ''}`, !added.length);
+    notice(`“${purpose.name}”에 받은 ${countLabel(added)}을 넣었어요.${skipped ? ` (${skipped}장은 열 수 없는 형식이라 뺐어요)` : ''}`, !added.length);
     busy = false; render();
     // 넣은 목적 폴더로 화면을 옮겨서 바로 보이게 해요.
     document.querySelector(`.folder[data-id="${purposeId}"]`)?.scrollIntoView({ behavior:'smooth', block:'start' });
@@ -664,8 +852,13 @@ function showFallback(reason) {
 }
 
 // 파일 이름에 사진마다 자기 목적 이름을 붙여요. 받은 쪽(드라이브·PC)에서도 어느 목적 사진인지 바로 보여요.
+function fileExt(item) {
+  if (item.kind !== 'video') return '.jpg';
+  const type = item.blob.type || item.mime || '';
+  return type.includes('mp4') ? '.mp4' : type.includes('quicktime') ? '.mov' : '.webm';
+}
 function photoFiles(picked) {
-  return picked.map((photo, index) => new File([photo.blob], `${safeName(purposeName(photo))}_${fileStamp(photo.created)}_${index + 1}.jpg`, { type:'image/jpeg', lastModified:photo.created }));
+  return picked.map((photo, index) => new File([photo.blob], `${safeName(purposeName(photo))}_${fileStamp(photo.created)}_${index + 1}${fileExt(photo)}`, { type:photo.blob.type || (photo.kind === 'video' ? 'video/mp4' : 'image/jpeg'), lastModified:photo.created }));
 }
 function pickedSummary(picked) {
   const names = [...new Set(picked.map(purposeName))];
@@ -695,6 +888,8 @@ document.querySelectorAll('.share').forEach(button => button.addEventListener('c
   const target = TARGETS[button.dataset.target];
   const picked = selectedPhotos();
   if (!picked.length) { shareStatus(photos.length ? '먼저 보낼 사진을 체크해 주세요. (사진 왼쪽 위 네모 칸, 또는 목적 폴더를 펼쳐 "이 목적 선택")' : '보낼 사진이 없어요. 먼저 사진을 찍어 주세요.', true); return; }
+  if (button.dataset.target === 'sms' && picked.some(isVideo)) { shareStatus('문자(MMS)는 용량 한도가 작아서 동영상을 보낼 수 없어요. 카카오톡·드라이브·회사 PC로 보내 주세요.', true); return; }
+  if (button.dataset.target === 'email' && totalSize(picked) > EMAIL_LIMIT) { shareStatus(`합계 ${sizeLabel(totalSize(picked))}라 메일 첨부 한도(약 25MB)를 넘어요. Gmail이면 드라이브 링크로 바뀌어 보내져요. 공유 화면을 열게요.`); }
   if (button.dataset.target === 'sms' && picked.length > MAX_SMS) { shareStatus(`문자는 한 번에 ${MAX_SMS}장까지 보내 주세요. 많으면 드라이브나 카카오톡이 좋아요.`, true); return; }
   const files = photoFiles(picked);
   if (!navigator.share) {
@@ -755,7 +950,7 @@ $('confirm-delete').addEventListener('click', async () => {
   finally { busy = false; pendingDelete = null; $('confirm-delete').disabled = false; $('cancel-delete').disabled = false; $('delete-dialog').close(); render(); }
 });
 $('close-photo').addEventListener('click', () => $('photo-dialog').close());
-$('photo-dialog').addEventListener('close', () => { $('large-photo').removeAttribute('src'); if (largeUrl) URL.revokeObjectURL(largeUrl); largeUrl = ''; });
+$('photo-dialog').addEventListener('close', () => { $('large-video').pause(); $('large-video').removeAttribute('src'); $('large-video').load(); $('large-photo').removeAttribute('src'); if (largeUrl) URL.revokeObjectURL(largeUrl); largeUrl = ''; });
 
 /* ---------- 시작 ---------- */
 async function initialize() {

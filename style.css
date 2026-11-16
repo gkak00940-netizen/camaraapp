@@ -151,7 +151,7 @@ body.has-bar main { padding-bottom:290px; }
 .import-btn { width:100%; margin-top:12px; min-height:52px; border:2px dashed #b9c6d6; background:#f6f9fc; color:var(--navy); }
 .import-btn span { font-weight:500; font-size:14px; color:var(--muted); }
 .import-preview { display:flex; gap:4px; overflow-x:auto; margin:10px 0; }
-.import-preview img { width:64px; height:64px; flex:none; object-fit:cover; border-radius:8px; }
+.import-preview img, .import-preview video { width:64px; height:64px; flex:none; object-fit:cover; border-radius:8px; }
 .import-purposes { display:flex; flex-direction:column; gap:6px; max-height:38dvh; overflow-y:auto; }
 .import-purposes label { display:flex; align-items:center; gap:10px; min-height:50px; padding:8px 12px; border:2px solid var(--line); border-radius:12px; font-weight:700; cursor:pointer; }
 .import-purposes label:has(input:checked) { border-color:var(--navy); background:#eef4fb; }
@@ -181,6 +181,26 @@ dialog::backdrop { background:#0009; }
 dialog h2 { font-size:21px; }
 .dialog-top { display:flex; justify-content:space-between; align-items:center; gap:10px; }
 .dialog-top p { margin:0; }
-#large-photo { display:block; width:100%; max-height:75dvh; object-fit:contain; margin-top:10px; }
+#large-photo, #large-video { display:block; width:100%; max-height:75dvh; object-fit:contain; margin-top:10px; background:#000; border-radius:8px; }
+
+/* 동영상 촬영 */
+.cam-bottom { row-gap:14px; }
+.cam-modes { grid-column:1 / -1; justify-self:center; display:flex; gap:4px; padding:4px; border-radius:999px; background:#0008; }
+.cam-mode { min-height:38px; padding:6px 18px; border:0; border-radius:999px; background:none; color:#fffc; font-size:15px; }
+.cam-mode[aria-checked="true"] { background:white; color:var(--ink); }
+.camera-screen.video-mode .shutter span { background:#e5383b; }
+.camera-screen.recording .shutter span { border-radius:10px; transform:scale(.5); }
+.camera-screen.recording .cam-modes { visibility:hidden; }
+.rec-timer { position:absolute; left:50%; top:calc(70px + env(safe-area-inset-top)); transform:translateX(-50%); display:flex; align-items:center; gap:8px; margin:0; padding:6px 14px; border-radius:999px; background:#e5383bdd; color:white; font-weight:800; font-size:18px; font-variant-numeric:tabular-nums; }
+.rec-timer small { font-size:13px; font-weight:600; opacity:.9; }
+.camera-screen.recording .cam-toast { top:calc(124px + env(safe-area-inset-top)); }
+.rec-dot { width:10px; height:10px; border-radius:50%; background:white; animation:blink 1s steps(2) infinite; }
+@keyframes blink { 50% { opacity:0; } }
+.photo-video { position:absolute; left:50%; top:50%; transform:translate(-50%,-60%); display:grid; place-items:center; width:38px; height:38px; border-radius:50%; background:#000a; color:white; font-size:16px; pointer-events:none; }
+.photo-dur { margin-left:4px; padding:0 5px; border-radius:4px; background:#e5383b; font-size:11px; }
+.folder-peek .peek { position:relative; }
+.folder-peek .peek::after { content:"▶"; position:absolute; right:4px; bottom:4px; padding:1px 5px; border-radius:4px; background:#000a; color:white; font-size:10px; }
+.size-note { margin:8px 2px 0; font-size:14px; color:var(--muted); }
+.size-note.warn { color:#b45309; font-weight:700; }
 .dialog-actions { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
 @media(min-width:700px) { .photos { grid-template-columns:repeat(4,minmax(0,1fr)); } .action-bar { left:50%; right:auto; width:min(820px,100%); transform:translateX(-50%); } }
