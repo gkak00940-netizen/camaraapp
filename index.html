@@ -10,10 +10,10 @@
   <link rel="apple-touch-icon" href="icons/icon-192.png">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="업무 사진">
-  <link rel="stylesheet" href="style.css?v=12">
-  <script src="config.js?v=12" defer></script>
-  <script src="relay.js?v=12" defer></script>
-  <script src="app.js?v=12" defer></script>
+  <link rel="stylesheet" href="style.css?v=13">
+  <script src="config.js?v=13" defer></script>
+  <script src="relay.js?v=13" defer></script>
+  <script src="app.js?v=13" defer></script>
 </head>
 <body>
   <header class="top">
@@ -58,10 +58,13 @@
 
   <!-- 사진을 고르면 화면 아래에 바로 나오는 보내기·삭제 -->
   <section id="action-bar" class="action-bar" hidden aria-label="선택한 사진 보내기와 삭제">
+    <!-- 고르는 동안은 한 줄만: 사진을 가리지 않게 해요. "보내기·삭제"를 누르면 아래가 펼쳐져요. -->
     <div class="bar-top">
-      <strong id="selection-count">0장 선택</strong>
-      <button type="button" id="clear-selection" class="small">선택 해제</button>
+      <span class="bar-count"><strong id="selection-count">0장 선택</strong><small id="selection-size"></small></span>
+      <button type="button" id="clear-selection" class="small">해제</button>
+      <button type="button" id="toggle-send" class="accent small" aria-expanded="false" aria-controls="bar-more">보내기·삭제 ▲</button>
     </div>
+    <div id="bar-more" class="bar-more" hidden>
     <p id="size-note" class="size-note" role="status"></p>
     <div class="send-box" role="group" aria-labelledby="send-title">
       <p class="send-title" id="send-title"><span class="send-arrow" aria-hidden="true">↗</span> 보내기 <span class="send-sub">보낼 곳을 누르세요</span></p>
@@ -80,6 +83,7 @@
       <button type="button" id="save-photos">선택한 사진 휴대폰에 저장</button>
     </div>
     <button type="button" id="delete-selected" class="delete-link">🗑 선택한 사진 삭제</button>
+    </div>
   </section>
 
   <div id="share-hint" class="share-hint" hidden></div>

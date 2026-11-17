@@ -107,16 +107,24 @@ function sizeAdvice(list) {
   note.textContent = text; note.className = warn ? 'size-note warn' : 'size-note';
 }
 
+function setBarOpen(open) {
+  $('bar-more').hidden = !open;
+  $('action-bar').classList.toggle('open', open);
+  $('toggle-send').setAttribute('aria-expanded', String(open));
+  $('toggle-send').textContent = open ? '접기 ▼' : '보내기·삭제 ▲';
+}
+
 function controls() {
   const count = selectedPhotos().length;
-  // 사진을 하나라도 고르면 화면 아래에 보내기·삭제 바가 바로 나와요. (스크롤 안 내려도 돼요)
+  // 사진을 하나라도 고르면 화면 아래에 한 줄짜리 바가 나와요. 고르는 동안 사진을 가리지 않게
+  // 접어 두고, "보내기·삭제"를 누르면 보낼 곳과 삭제가 펼쳐져요.
   const wasHidden = $('action-bar').hidden;
   $('action-bar').hidden = !count;
   document.body.classList.toggle('has-bar', !!count);
-  if (!count) { $('share-status').hidden = true; $('share-fallback').hidden = true; }
-  else if (wasHidden) { $('share-status').hidden = true; $('share-fallback').hidden = true; }
+  if (!count || wasHidden) { $('share-status').hidden = true; $('share-fallback').hidden = true; setBarOpen(false); }
   const pickedNow = selectedPhotos();
   $('selection-count').textContent = `${countLabel(pickedNow)} 선택`;
+  $('selection-size').textContent = count ? `합계 ${sizeLabel(totalSize(pickedNow))}` : '';
   sizeAdvice(pickedNow);
   document.querySelectorAll('.share').forEach(button => { button.disabled = busy; });
   $('save-photos').disabled = busy || !count;
@@ -331,10 +339,16 @@ function folderView() {
     if (isOpen) {
       const body = document.createElement('div'); body.className = 'folder-body';
       const actions = document.createElement('div'); actions.className = 'folder-actions';
-      if (list.length) actions.append(button(`이 목적 ${Math.min(list.length, MAX_SHARE)}장 선택`, () => {
-        const ids = list.slice(0, MAX_SHARE).map(p => p.id);
-        selected.clear(); ids.forEach(id => selected.add(id)); renderPhotos();
-        shareStatus(`“${purpose.name}” 사진 ${ids.length}장을 골랐어요. 아래 보내기에서 앱을 누르세요.`);
+      // 다른 목적에서 이미 고른 사진은 그대로 두고, 이 목적 사진을 더해요. (전체 최대 MAX_SHARE장)
+      const allPicked = list.length && list.every(p => selected.has(p.id));
+      if (list.length) actions.append(button(allPicked ? '이 목적 선택 풀기' : '이 목적 모두 선택', () => {
+        if (allPicked) { list.forEach(p => selected.delete(p.id)); renderPhotos(); return; }
+        let added = 0;
+        for (const p of list) { if (selected.size >= MAX_SHARE) break; if (!selected.has(p.id)) { selected.add(p.id); added++; } }
+        renderPhotos();
+        notice(selected.size >= MAX_SHARE && added < list.length
+          ? `한 번에 최대 ${MAX_SHARE}개까지라 “${purpose.name}”에서 ${added}개만 더 골랐어요.`
+          : `“${purpose.name}”에서 ${added}개를 더 골랐어요. 아래 “보내기·삭제”를 누르세요.`);
       }));
       if (purpose.id) actions.append(button('＋ 가져오기', () => pickImport(purpose.id)));
       if (purpose.id && purpose.id !== current) actions.append(button('이 목적으로 찍기', () => selectPurpose(purpose.id), 'accent'));
@@ -834,6 +848,7 @@ async function receiveSharedPhotos() {
 
 /* ---------- 선택 ---------- */
 $('clear-selection').addEventListener('click', () => { selected.clear(); renderPhotos(); });
+$('toggle-send').addEventListener('click', () => setBarOpen($('bar-more').hidden));
 
 /* ---------- 보내기: 휴대폰 공유 화면을 열고, 고를 앱을 위에 크게 알려 줘요 ---------- */
 let hintTimer = 0;
@@ -844,6 +859,8 @@ function showHint(text) {
 
 // 보내기 결과는 버튼 바로 밑에 보여 줘요. (위쪽 안내 칸은 화면 밖이라 안 보여요)
 function shareStatus(text, error = false) {
+  // 안내가 보이도록 바를 펼쳐요.
+  if (!$('action-bar').hidden) setBarOpen(true);
   $('share-status').textContent = text; $('share-status').hidden = false;
   $('share-status').className = error ? 'share-status error' : 'share-status';
   notice(text, error);
