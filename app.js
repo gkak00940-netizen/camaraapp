@@ -262,16 +262,18 @@ function photoCard(photo, { tag }) {
   checkbox.setAttribute('aria-label', `${purposeName(photo)} ${dateLabel(photo.created)} 사진 선택`);
   checkbox.addEventListener('change', () => { if (!toggleSelect(photo, checkbox.checked, card)) checkbox.checked = false; });
   label.append(checkbox);
+  // 사진 위에는 찍은 시각을 쓰지 않아요. (시각은 사진을 눌러 크게 볼 때 위쪽에 나와요)
+  // 날짜별 보기에서는 어느 목적인지 알 수 있게 아래 띠에 목적 이름만, 영상은 길이만 보여 줘요.
   const time = document.createElement('p'); time.className = 'photo-time';
-  // 날짜별 보기: 아래 띠에 목적 이름(색 표시)과 시각을 함께 보여 줘요.
   if (tag) {
     const name = document.createElement('b'); name.className = 'photo-purpose'; name.textContent = purposeName(photo);
     name.style.setProperty('--dot', purposeColor(photo.purpose));
-    time.append(name, document.createTextNode(timeLabel(photo.created)));
+    time.append(name);
     card.style.setProperty('--dot', purposeColor(photo.purpose)); card.classList.add('tagged');
-  } else time.textContent = timeLabel(photo.created);
+  }
   if (video) { const d = document.createElement('span'); d.className = 'photo-dur'; d.textContent = durLabel(photo.duration || 0); time.append(d); }
-  card.append(open, label, time);
+  card.append(open, label);
+  if (time.childNodes.length) card.append(time);
   if (photo.received) { const r = document.createElement('span'); r.className = 'photo-recv'; r.textContent = '받음'; card.append(r); }
   if (photo.pcSent) { const s = document.createElement('span'); s.className = 'photo-pc'; s.textContent = 'PC✓'; s.title = 'PC로 보냄'; card.append(s); }
   return card;

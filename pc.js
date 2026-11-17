@@ -219,7 +219,7 @@ async function renderAlbum() {
           const h = el('h3', 'day', `${dayLabel(item.at)} `); h.append(el('span', '', countLabel(n)));
           grid = el('div', 'photos'); body.append(h, grid);
         }
-        grid.append(thumb(item, true));
+        grid.append(thumb(item, false)); // 사진 위에 시각은 표시하지 않아요 (크게 볼 때 위쪽에 나와요)
       });
       box.append(body);
     }
