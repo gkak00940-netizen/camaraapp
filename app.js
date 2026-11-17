@@ -255,13 +255,8 @@ function photoCard(photo, { tag }) {
   open.setAttribute('aria-label', `${purposeName(photo)} ${dateLabel(photo.created)} ${video ? '영상 보기' : '사진 크게 보기'}`);
   const image = document.createElement('img'); const src = photoUrl(photo); if (src) image.src = src; image.alt = ''; image.loading = 'lazy'; open.append(image);
   if (video) { const play = document.createElement('span'); play.className = 'photo-video'; play.textContent = '▶'; card.append(play); }
-  open.addEventListener('click', () => {
-    largeUrl = URL.createObjectURL(photo.blob);
-    $('large-photo').hidden = video; $('large-video').hidden = !video;
-    if (video) { $('large-video').src = largeUrl; $('large-video').play().catch(() => {}); } else $('large-photo').src = largeUrl;
-    $('large-caption').textContent = `${purposeName(photo)} · ${dayLabel(photo.created).replace(/^.* · /, '')} ${timeLabel(photo.created)}${video ? ` · ${durLabel(photo.duration || 0)}` : ''} · ${sizeLabel(photo.blob.size)}`;
-    $('photo-dialog').showModal();
-  });
+  // 누르면 갤러리처럼 화면 전체로 보여요. 목적별에서는 그 목적 사진들을, 날짜별에서는 전체를 넘겨 볼 수 있어요.
+  open.addEventListener('click', () => openViewer(tag ? [...photos].sort(newestFirst) : purposePhotos(photo.purpose), photo.id));
   const label = document.createElement('label');
   const checkbox = document.createElement('input'); checkbox.type = 'checkbox'; checkbox.checked = selected.has(photo.id);
   checkbox.setAttribute('aria-label', `${purposeName(photo)} ${dateLabel(photo.created)} 사진 선택`);
@@ -962,20 +957,145 @@ $('confirm-delete').addEventListener('click', async () => {
     if (job.type === 'photos') {
       await write('photos', t => job.ids.forEach(id => t.objectStore('photos').delete(id)));
       photos = photos.filter(photo => !job.ids.includes(photo.id));
+      job.ids.forEach(id => selected.delete(id)); // 지운 것만 선택에서 빼고, 다른 선택은 그대로
       notice(`사진 ${job.ids.length}장을 지웠어요.`);
+      // 갤러리에서 지웠으면 다음 장을 이어서 보여 줘요.
+      if (viewerOpen()) {
+        viewerList = viewerList.filter(p => !job.ids.includes(p.id));
+        viewerIndex = Math.min(viewerIndex, viewerList.length - 1);
+        if (viewerList.length) renderViewer(); else closeViewer();
+      }
     } else {
       const ids = purposePhotos(job.purpose.id).map(photo => photo.id);
       await write(['photos', 'purposes'], t => { ids.forEach(id => t.objectStore('photos').delete(id)); t.objectStore('purposes').delete(job.purpose.id); });
       photos = photos.filter(photo => photo.purpose !== job.purpose.id); purposes = purposes.filter(p => p.id !== job.purpose.id);
       if (current === job.purpose.id) { current = [...purposes].sort((a, b) => b.used - a.used)[0]?.id || ''; savePrefs(); if (!current) stopCamera(); }
       notice(`“${job.purpose.name}” 목적을 지웠어요.`);
+      ids.forEach(id => selected.delete(id));
     }
-    selected.clear();
   } catch { notice('지우지 못했어요. 다시 시도해 주세요.', true); }
   finally { busy = false; pendingDelete = null; $('confirm-delete').disabled = false; $('cancel-delete').disabled = false; $('delete-dialog').close(); render(); }
 });
 $('close-photo').addEventListener('click', () => $('photo-dialog').close());
 $('photo-dialog').addEventListener('close', () => { $('large-video').pause(); $('large-video').removeAttribute('src'); $('large-video').load(); $('large-photo').removeAttribute('src'); if (largeUrl) URL.revokeObjectURL(largeUrl); largeUrl = ''; });
+
+/* ---------- 갤러리처럼 보기 ---------- */
+// 화면 전체에 한 장씩. 옆으로 밀거나 ‹ › 로 넘기고, 두 번 톡 치면 확대, 한 번 치면 위아래 버튼 숨기기.
+// 아래 "선택"으로 하나씩 확인하며 고르고, "보내기"로 바로 보낼 곳을 고를 수 있어요.
+let viewerList = [];
+let viewerIndex = 0;
+let viewerUrls = [];
+const viewerOpen = () => !$('viewer').hidden;
+
+function openViewer(list, id) {
+  viewerList = list; viewerIndex = Math.max(0, list.findIndex(p => p.id === id));
+  $('viewer').hidden = false; $('viewer').classList.remove('chrome-off'); document.body.style.overflow = 'hidden';
+  if (!history.state?.viewer) history.pushState({ viewer:true }, '');
+  renderViewer();
+}
+
+function closeViewer(fromBack = false) {
+  if (!viewerOpen()) return;
+  $('viewer').hidden = true; document.body.style.overflow = '';
+  $('viewer-track').querySelectorAll('video').forEach(v => v.pause());
+  $('viewer-track').replaceChildren(); viewerUrls.forEach(u => URL.revokeObjectURL(u)); viewerUrls = [];
+  if (!fromBack && history.state?.viewer) history.back();
+  renderPhotos();
+}
+
+function slideFor(item, active) {
+  const slide = document.createElement('div'); slide.className = 'viewer-slide';
+  if (!item) return slide;
+  const url = URL.createObjectURL(item.kind === 'video' && !active ? (item.poster || item.blob) : item.blob); viewerUrls.push(url);
+  if (item.kind === 'video' && active) {
+    const v = document.createElement('video'); v.src = url; v.controls = true; v.playsInline = true; slide.append(v);
+  } else {
+    const img = document.createElement('img'); img.src = url; img.alt = ''; img.draggable = false; slide.append(img);
+    if (item.kind === 'video') { const p = document.createElement('span'); p.className = 'vplay'; p.textContent = '▶'; slide.append(p); }
+  }
+  return slide;
+}
+
+function renderViewer() {
+  viewerUrls.forEach(u => URL.revokeObjectURL(u)); viewerUrls = [];
+  const item = viewerList[viewerIndex];
+  if (!item) { closeViewer(); return; }
+  const track = $('viewer-track'); track.classList.remove('animate'); track.style.transform = '';
+  track.replaceChildren(slideFor(viewerList[viewerIndex - 1], false), slideFor(item, true), slideFor(viewerList[viewerIndex + 1], false));
+  $('viewer-purpose').textContent = purposeName(item);
+  $('viewer-meta').textContent = `${dayLabel(item.created)} ${timeLabel(item.created)}${item.kind === 'video' ? ` · 영상 ${durLabel(item.duration || 0)}` : ''} · ${sizeLabel(item.blob.size)}${item.received ? ' · 받음' : ''}${item.pcSent ? ' · PC✓' : ''}`;
+  $('viewer-count').textContent = `${viewerIndex + 1} / ${viewerList.length}`;
+  $('viewer-prev').disabled = viewerIndex === 0; $('viewer-next').disabled = viewerIndex === viewerList.length - 1;
+  updateViewerSelect();
+}
+
+function updateViewerSelect() {
+  const item = viewerList[viewerIndex]; if (!item) return;
+  const on = selected.has(item.id);
+  $('viewer-select').setAttribute('aria-pressed', String(on));
+  $('viewer-select-label').textContent = on ? '선택됨' : '선택';
+  $('viewer-send').hidden = !selected.size;
+  $('viewer-send-count').textContent = `(${selected.size})`;
+}
+
+// 옆으로 넘기기: 미끄러지듯 움직인 뒤 다음 장으로 바꿔요.
+function goViewer(step) {
+  const next = viewerIndex + step;
+  if (next < 0 || next >= viewerList.length) { bounce(); return; }
+  const track = $('viewer-track'); track.querySelectorAll('video').forEach(v => v.pause());
+  track.classList.add('animate'); track.style.transform = `translateX(${step > 0 ? '-66.6667%' : '0%'})`;
+  setTimeout(() => { viewerIndex = next; renderViewer(); }, 220);
+}
+function bounce() { const t = $('viewer-track'); t.classList.add('animate'); t.style.transform = ''; }
+
+$('viewer-prev').addEventListener('click', () => goViewer(-1));
+$('viewer-next').addEventListener('click', () => goViewer(1));
+$('viewer-close').addEventListener('click', () => closeViewer());
+$('viewer-select').addEventListener('click', () => {
+  const item = viewerList[viewerIndex]; if (!item) return;
+  if (toggleSelect(item, !selected.has(item.id), null)) updateViewerSelect();
+});
+// 보내기: 갤러리를 닫고 아래 보내기 칸을 펼쳐요.
+$('viewer-send').addEventListener('click', () => { closeViewer(); setBarOpen(true); });
+$('viewer-delete').addEventListener('click', () => {
+  const item = viewerList[viewerIndex]; if (!item) return;
+  pendingDelete = { type:'photos', ids:[item.id] };
+  $('delete-title').textContent = item.kind === 'video' ? '이 영상을 지울까요?' : '이 사진을 지울까요?';
+  $('delete-description').textContent = `${purposeName(item)} · ${dayLabel(item.created)} ${timeLabel(item.created)}`;
+  $('delete-dialog').showModal();
+});
+
+// 손가락으로 밀기 / 두 번 톡 확대 / 한 번 톡 버튼 숨기기
+(() => {
+  const area = $('viewer'); let startX = 0, startY = 0, dx = 0, moving = false, lastTap = 0, tapTimer = 0;
+  area.addEventListener('touchstart', e => {
+    if (e.touches.length !== 1 || e.target.closest('button, video')) return;
+    startX = e.touches[0].clientX; startY = e.touches[0].clientY; dx = 0; moving = true;
+    $('viewer-track').classList.remove('animate');
+  }, { passive:true });
+  area.addEventListener('touchmove', e => {
+    if (!moving || document.querySelector('.viewer-slide img.zoom')) return;
+    dx = e.touches[0].clientX - startX;
+    if (Math.abs(dx) > Math.abs(e.touches[0].clientY - startY)) $('viewer-track').style.transform = `translateX(calc(-33.3333% + ${dx}px))`;
+  }, { passive:true });
+  area.addEventListener('touchend', () => {
+    if (!moving) return; moving = false;
+    if (Math.abs(dx) > 60) goViewer(dx < 0 ? 1 : -1); else if (Math.abs(dx) > 5) bounce();
+  });
+  area.addEventListener('click', e => {
+    if (e.target.closest('button, video') || Math.abs(dx) > 5) return;
+    const img = e.target.closest('.viewer-slide img'); const now = Date.now();
+    if (img && now - lastTap < 300) { clearTimeout(tapTimer); img.classList.toggle('zoom'); lastTap = 0; return; }
+    lastTap = now;
+    tapTimer = setTimeout(() => $('viewer').classList.toggle('chrome-off'), 300);
+  });
+  document.addEventListener('keydown', e => {
+    if (!viewerOpen() || document.querySelector('dialog[open]')) return;
+    if (e.key === 'ArrowLeft') goViewer(-1); else if (e.key === 'ArrowRight') goViewer(1); else if (e.key === 'Escape') closeViewer();
+  });
+  // 휴대폰 뒤로 가기로 닫기
+  window.addEventListener('popstate', () => { if (viewerOpen()) closeViewer(true); });
+})();
 
 /* ---------- 시작 ---------- */
 async function initialize() {

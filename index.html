@@ -10,10 +10,10 @@
   <link rel="apple-touch-icon" href="icons/icon-192.png">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="업무 사진">
-  <link rel="stylesheet" href="style.css?v=13">
-  <script src="config.js?v=13" defer></script>
-  <script src="relay.js?v=13" defer></script>
-  <script src="app.js?v=13" defer></script>
+  <link rel="stylesheet" href="style.css?v=14">
+  <script src="config.js?v=14" defer></script>
+  <script src="relay.js?v=14" defer></script>
+  <script src="app.js?v=14" defer></script>
 </head>
 <body>
   <header class="top">
@@ -106,7 +106,24 @@
     </div>
   </div>
 
-  <dialog id="photo-dialog"><div class="dialog-top"><p id="large-caption"></p><button type="button" id="close-photo">닫기</button></div><img id="large-photo" alt="크게 본 사진"><video id="large-video" controls playsinline hidden></video></dialog>
+  <!-- 갤러리처럼 보기: 화면 전체에 한 장씩, 옆으로 밀어서 넘겨요 -->
+  <div id="viewer" class="viewer" hidden role="dialog" aria-label="사진 크게 보기">
+    <div id="viewer-track" class="viewer-track"></div>
+    <div class="viewer-top">
+      <button type="button" id="viewer-close" class="viewer-btn" aria-label="닫기">✕</button>
+      <div class="viewer-info"><b id="viewer-purpose"></b><span id="viewer-meta"></span></div>
+      <span id="viewer-count" class="viewer-count"></span>
+    </div>
+    <button type="button" id="viewer-prev" class="viewer-nav prev" aria-label="이전 사진">‹</button>
+    <button type="button" id="viewer-next" class="viewer-nav next" aria-label="다음 사진">›</button>
+    <div class="viewer-bottom">
+      <button type="button" id="viewer-select" class="viewer-select" aria-pressed="false"><span class="vs-box" aria-hidden="true"></span><span id="viewer-select-label">선택</span></button>
+      <button type="button" id="viewer-send" class="viewer-send" hidden>보내기 <span id="viewer-send-count"></span></button>
+      <button type="button" id="viewer-delete" class="viewer-btn" aria-label="이 사진 삭제">🗑</button>
+    </div>
+  </div>
+  <!-- 이전 방식(작은 창)은 쓰지 않지만, 다른 코드가 찾을 수 있게 남겨 둬요 -->
+  <dialog id="photo-dialog" hidden><p id="large-caption"></p><button type="button" id="close-photo">닫기</button><img id="large-photo" alt=""><video id="large-video" hidden></video></dialog>
   <!-- 받은 사진을 어느 목적에 넣을지 고르기 -->
   <dialog id="import-dialog" aria-labelledby="import-title">
     <h2 id="import-title">사진을 어느 목적에 넣을까요?</h2>
