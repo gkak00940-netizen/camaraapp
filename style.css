@@ -92,6 +92,10 @@ h2 { margin:0; font-size:20px; overflow-wrap:anywhere; }
 .album { display:flex; flex-direction:column; gap:10px; }
 .folder { border:1px solid var(--line); border-radius:14px; overflow:hidden; }
 .folder.current { border-color:var(--navy); }
+.folder-top { display:flex; align-items:stretch; background:white; }
+.folder-top .folder-head { flex:1; min-width:0; }
+.folder-edit { flex:none; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:0; width:56px; min-height:0; margin:8px 8px 8px 0; padding:4px; border:1px solid var(--line); border-radius:10px; background:#f6f9fc; color:var(--navy); font-size:18px; line-height:1.1; }
+.folder-edit small { font-size:12px; font-weight:700; }
 .folder-head { display:grid; grid-template-columns:1fr auto; gap:4px 10px; width:100%; min-height:0; padding:12px 14px; border:0; border-radius:0; background:white; text-align:left; }
 .folder-name { font-size:18px; font-weight:800; color:var(--navy); overflow-wrap:anywhere; }
 .folder-name .now { margin-left:6px; padding:2px 8px; border-radius:999px; background:var(--accent); color:#1b1400; font-size:13px; vertical-align:2px; }

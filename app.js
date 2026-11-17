@@ -312,7 +312,16 @@ function folderView() {
     })();
     head.append(name, count, meta);
     head.addEventListener('click', () => { if (openFolders.has(purpose.id)) openFolders.delete(purpose.id); else openFolders.add(purpose.id); renderPhotos(); });
-    folder.append(head);
+    // 폴더 머리 오른쪽 ✎: 접혀 있어도 바로 목적 이름을 바꿀 수 있어요.
+    const top = document.createElement('div'); top.className = 'folder-top'; top.append(head);
+    if (purpose.id) {
+      const edit = document.createElement('button'); edit.type = 'button'; edit.className = 'folder-edit';
+      edit.innerHTML = '<span aria-hidden="true">✎</span><small>이름</small>';
+      edit.setAttribute('aria-label', `${purpose.name} 목적 이름 바꾸기`);
+      edit.addEventListener('click', () => askRename(purposes.find(p => p.id === purpose.id)));
+      top.append(edit);
+    }
+    folder.append(top);
     if (!isOpen && list.length) {
       const peek = document.createElement('div'); peek.className = 'folder-peek';
       list.slice(0, 4).forEach(photo => { const wrap = document.createElement('span'); wrap.className = photo.kind === 'video' ? 'peek' : ''; const img = document.createElement('img'); const src = photoUrl(photo); if (src) img.src = src; img.alt = ''; img.loading = 'lazy'; wrap.append(img); peek.append(wrap); });
@@ -328,7 +337,6 @@ function folderView() {
         shareStatus(`“${purpose.name}” 사진 ${ids.length}장을 골랐어요. 아래 보내기에서 앱을 누르세요.`);
       }));
       if (purpose.id) actions.append(button('＋ 가져오기', () => pickImport(purpose.id)));
-      if (purpose.id) actions.append(button('✎ 이름', () => askRename(purposes.find(p => p.id === purpose.id))));
       if (purpose.id && purpose.id !== current) actions.append(button('이 목적으로 찍기', () => selectPurpose(purpose.id), 'accent'));
       if (actions.children.length) body.append(actions);
       if (list.length) body.append(dayGroups(list, false));
