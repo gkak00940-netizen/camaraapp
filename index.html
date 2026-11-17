@@ -10,10 +10,10 @@
   <link rel="apple-touch-icon" href="icons/icon-192.png">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="업무 사진">
-  <link rel="stylesheet" href="style.css?v=15">
-  <script src="config.js?v=15" defer></script>
-  <script src="relay.js?v=15" defer></script>
-  <script src="app.js?v=15" defer></script>
+  <link rel="stylesheet" href="style.css?v=16">
+  <script src="config.js?v=16" defer></script>
+  <script src="relay.js?v=16" defer></script>
+  <script src="app.js?v=16" defer></script>
 </head>
 <body>
   <header class="top">
@@ -39,6 +39,13 @@
     </section>
 
     <p id="notice" class="notice" role="status">불러오고 있어요…</p>
+
+    <!-- 회사 PC 연결 상태: 늘 보이게 해서, 연결됐는지 바로 알 수 있어요 -->
+    <section id="pc-card" class="card pc-card" hidden aria-label="회사 PC 연결">
+      <span class="pc-card-icon" aria-hidden="true">🖥</span>
+      <span class="pc-card-text"><b id="pc-card-title">회사 PC 연결 안 됨</b><small id="pc-card-sub">PC 받기 화면의 QR을 이 앱으로 찍어 연결해요</small></span>
+      <button type="button" id="pc-card-btn" class="accent small">연결하기</button>
+    </section>
 
     <section class="card" aria-labelledby="album-title">
       <div class="heading"><h2 id="album-title">사진 보관함</h2><span id="album-count" class="count">0장</span></div>
@@ -124,6 +131,19 @@
   </div>
   <!-- 이전 방식(작은 창)은 쓰지 않지만, 다른 코드가 찾을 수 있게 남겨 둬요 -->
   <dialog id="photo-dialog" hidden><p id="large-caption"></p><button type="button" id="close-photo">닫기</button><img id="large-photo" alt=""><video id="large-video" hidden></video></dialog>
+  <!-- 회사 PC 연결: 이 앱 안에서 QR을 찍어요. (휴대폰 카메라 앱으로 찍으면 다른 브라우저에 저장될 수 있어서) -->
+  <dialog id="pair-dialog" class="pair-dialog" aria-labelledby="pair-title">
+    <h2 id="pair-title">회사 PC와 연결</h2>
+    <p class="help">회사 PC에서 <b>PC 받기</b> 화면을 열고, 화면의 <b>QR</b>을 아래 네모 안에 비춰 주세요.</p>
+    <div id="pair-scan" class="pair-scan"><video id="pair-video" playsinline muted></video><span class="pair-frame" aria-hidden="true"></span></div>
+    <p id="pair-status" class="help" role="status"></p>
+    <details id="pair-paste" class="pair-paste">
+      <summary>QR이 안 찍히면: 연결 주소 붙여넣기</summary>
+      <p class="help">PC 받기 화면의 <b>“연결 주소 복사”</b>를 누르고, 카톡 “나와의 채팅” 등으로 휴대폰에 보낸 뒤 그 주소를 길게 눌러 복사해서 아래에 붙여 넣으세요.</p>
+      <div class="purpose-row"><input id="pair-input" class="text-input" placeholder="연결 주소 붙여넣기" autocomplete="off"><button type="button" id="pair-paste-btn" class="accent">연결</button></div>
+    </details>
+    <div class="dialog-actions"><button type="button" id="pair-cancel">닫기</button><button type="button" id="pair-unlink" class="danger" hidden>연결 끊기</button></div>
+  </dialog>
   <!-- 받은 사진을 어느 목적에 넣을지 고르기 -->
   <dialog id="import-dialog" aria-labelledby="import-title">
     <h2 id="import-title">사진을 어느 목적에 넣을까요?</h2>

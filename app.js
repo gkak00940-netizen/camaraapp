@@ -650,29 +650,135 @@ window.addEventListener('pagehide', stopCamera);
 const PC_KEY = 'work-photos-pc-v1';
 function pcLink() { try { return JSON.parse(localStorage.getItem(PC_KEY)) || null; } catch { return null; } }
 
-// PC 받기 화면의 QR을 휴대폰 카메라로 찍으면 "?pair=연결코드"로 이 앱이 열려요. 그 코드를 기억해요.
+// 연결 주소(QR 내용)에서 연결 코드와 PC 이름을 꺼내요. 주소 전체든 코드만이든 받아요.
+function parsePairing(text) {
+  const value = String(text || '').trim();
+  if (/^[a-f0-9]{32,}$/.test(value)) return { box:value, name:'회사 PC' };
+  try {
+    const url = new URL(value); const box = url.searchParams.get('pair');
+    if (box && /^[a-f0-9]{32,}$/.test(box)) return { box, name:url.searchParams.get('pc') || '회사 PC' };
+  } catch { /* 주소가 아니에요 */ }
+  return null;
+}
+
+function savePairing({ box, name }) {
+  try { localStorage.setItem(PC_KEY, JSON.stringify({ box, name, at:Date.now() })); }
+  catch { notice('연결을 저장하지 못했어요. 크롬 설정에서 이 사이트의 저장을 막지 않았는지 확인해 주세요.', true); return false; }
+  renderPcButton();
+  notice(`“${name}”와 연결했어요. 이제 사진을 고르고 “${name}로 보내기”를 누르면 PC에 목적별 폴더로 저장돼요.`);
+  return true;
+}
+
+// 휴대폰 카메라 앱으로 QR을 찍어 "?pair=연결코드" 주소로 이 앱이 열렸을 때도 연결해요.
 function receivePairing() {
-  const params = new URLSearchParams(location.search);
-  const box = params.get('pair');
-  if (!box) return;
+  if (!new URLSearchParams(location.search).has('pair')) return;
+  const found = parsePairing(location.href);
   history.replaceState(null, '', location.pathname);
-  if (!/^[a-f0-9]{32,}$/.test(box)) { notice('연결 코드가 올바르지 않아요. PC 받기 화면의 QR을 다시 찍어 주세요.', true); return; }
-  try { localStorage.setItem(PC_KEY, JSON.stringify({ box, name:params.get('pc') || '회사 PC', at:Date.now() })); } catch { /* 저장 못 하면 아래에서 안내 */ }
-  notice(`“${params.get('pc') || '회사 PC'}”와 연결했어요. 사진을 고르고 “회사 PC로 보내기”를 누르면 PC에 목적별 폴더로 저장돼요.`);
+  if (!found) { notice('연결 코드가 올바르지 않아요. “회사 PC 연결 → 연결하기”로 다시 찍어 주세요.', true); return; }
+  savePairing(found);
 }
 
 function renderPcButton() {
   const on = window.Relay?.configured();
-  $('send-pc').hidden = !on; $('pc-link').hidden = !on;
+  $('send-pc').hidden = !on; $('pc-link').hidden = !on; $('pc-card').hidden = !on;
   const link = pcLink();
   $('send-pc-label').textContent = link ? `${link.name}로 보내기` : '회사 PC로 보내기';
+  $('pc-card').classList.toggle('linked', !!link);
+  $('pc-card-title').textContent = link ? `✓ ${link.name}와 연결됨` : '회사 PC 연결 안 됨';
+  $('pc-card-sub').textContent = link ? `${new Date(link.at).toLocaleDateString('ko-KR')}에 연결 · 다시 하려면 “바꾸기”` : 'PC 받기 화면의 QR을 이 앱으로 찍어 연결해요';
+  $('pc-card-btn').textContent = link ? '바꾸기' : '연결하기';
+  $('pc-card-btn').className = link ? 'small' : 'accent small';
 }
+
+/* ---------- 회사 PC 연결 창: 이 앱 카메라로 QR 찍기 / 주소 붙여넣기 ---------- */
+let pairStream = null;
+let pairTimer = 0;
+let qrReader = null; // 휴대폰에 QR 읽기 기능이 있으면 그걸, 없으면 작은 QR 읽기 프로그램을 불러 써요
+
+async function getQrReader() {
+  if (qrReader) return qrReader;
+  if ('BarcodeDetector' in window) {
+    try {
+      const formats = await BarcodeDetector.getSupportedFormats();
+      if (formats.includes('qr_code')) {
+        const detector = new BarcodeDetector({ formats:['qr_code'] });
+        qrReader = async video => (await detector.detect(video))[0]?.rawValue || null;
+        return qrReader;
+      }
+    } catch { /* 아래 방법으로 */ }
+  }
+  await new Promise((resolve, reject) => {
+    const s = document.createElement('script'); s.src = 'https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js';
+    s.onload = resolve; s.onerror = reject; document.head.append(s);
+  });
+  const canvas = document.createElement('canvas'); const ctx = canvas.getContext('2d', { willReadFrequently:true });
+  qrReader = async video => {
+    if (!video.videoWidth) return null;
+    const scale = Math.min(1, 640 / Math.max(video.videoWidth, video.videoHeight));
+    canvas.width = Math.round(video.videoWidth * scale); canvas.height = Math.round(video.videoHeight * scale);
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    return window.jsQR(ctx.getImageData(0, 0, canvas.width, canvas.height).data, canvas.width, canvas.height)?.data || null;
+  };
+  return qrReader;
+}
+
+function stopPairScan() {
+  clearTimeout(pairTimer); pairTimer = 0;
+  pairStream?.getTracks().forEach(t => t.stop()); pairStream = null;
+  $('pair-video').srcObject = null;
+}
+
+async function openPairing() {
+  const link = pcLink();
+  $('pair-unlink').hidden = !link;
+  $('pair-input').value = ''; $('pair-scan').hidden = false;
+  $('pair-status').textContent = link ? `지금은 “${link.name}”와 연결돼 있어요. 다른 PC와 연결하려면 그 PC의 QR을 비춰 주세요.` : '카메라를 켜고 있어요…';
+  $('pair-dialog').showModal();
+  try {
+    pairStream = await navigator.mediaDevices.getUserMedia({ audio:false, video:{ facingMode:{ ideal:'environment' } } });
+    if (!$('pair-dialog').open) { stopPairScan(); return; }
+    $('pair-video').srcObject = pairStream; await $('pair-video').play();
+    if (!link) $('pair-status').textContent = 'QR을 네모 안에 비춰 주세요.';
+    const read = await getQrReader();
+    const tick = async () => {
+      if (!pairStream) return;
+      try {
+        const text = await read($('pair-video'));
+        const found = text && parsePairing(text);
+        if (found) { stopPairScan(); $('pair-dialog').close(); savePairing(found); return; }
+        if (text) $('pair-status').textContent = '업무 사진 PC 받기 화면의 QR이 아니에요. PC 받기 화면의 QR을 비춰 주세요.';
+      } catch { /* 다음 장면에서 다시 */ }
+      pairTimer = setTimeout(tick, 250);
+    };
+    tick();
+  } catch (error) {
+    stopPairScan(); $('pair-scan').hidden = true; $('pair-paste').open = true;
+    $('pair-status').textContent = error?.name === 'NotAllowedError'
+      ? '카메라 허락이 없어 QR을 찍을 수 없어요. 아래에 연결 주소를 붙여 넣어 주세요.'
+      : 'QR을 찍을 수 없어요. 아래에 연결 주소를 붙여 넣어 주세요.';
+  }
+}
+
+$('pc-card-btn').addEventListener('click', openPairing);
+$('pair-cancel').addEventListener('click', () => $('pair-dialog').close());
+$('pair-dialog').addEventListener('close', stopPairScan);
+$('pair-paste-btn').addEventListener('click', () => {
+  const found = parsePairing($('pair-input').value);
+  if (!found) { $('pair-status').textContent = '연결 주소가 아니에요. PC 받기 화면의 “연결 주소 복사”로 받은 주소를 그대로 붙여 넣어 주세요.'; return; }
+  $('pair-dialog').close(); savePairing(found);
+});
+$('pair-unlink').addEventListener('click', () => {
+  if (!confirm('회사 PC와 연결을 끊을까요? 다시 보내려면 QR을 다시 찍어야 해요.')) return;
+  try { localStorage.removeItem(PC_KEY); } catch { /* 무시 */ }
+  $('pair-dialog').close(); renderPcButton(); notice('회사 PC와 연결을 끊었어요.');
+});
 
 $('send-pc').addEventListener('click', async () => {
   if (busy) return;
   const picked = selectedPhotos(); if (!picked.length) return;
   const link = pcLink();
-  if (!link) { shareStatus('먼저 회사 PC와 연결해 주세요. PC에서 “PC 받기” 화면을 열고, 화면의 QR을 휴대폰 카메라로 찍으면 연결돼요.', true); return; }
+  // 연결이 안 돼 있으면 바로 연결 창을 열어요. (연결되면 다시 누르면 돼요)
+  if (!link) { shareStatus('먼저 회사 PC와 연결해요. PC 받기 화면의 QR을 비춰 주세요. 연결되면 다시 “회사 PC로 보내기”를 누르세요.', true); openPairing(); return; }
   busy = true; controls();
   let done = 0;
   try {
