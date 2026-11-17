@@ -22,3 +22,15 @@
 .recv-log li span { margin-left:auto; color:var(--muted); white-space:nowrap; }
 .recv-log li.err { color:var(--danger); }
 @media(max-width:640px) { .pair { grid-template-columns:1fr; } }
+
+/* 받은 사진 · 목적별 (휴대폰 보관함과 같은 모양) */
+.pc .album { margin-top:12px; }
+.pc .photos { grid-template-columns:repeat(auto-fill, minmax(140px, 1fr)); }
+.pc-peek { grid-template-columns:repeat(6, 1fr); }
+.pc-peek .photo { border-radius:8px; }
+.pc-peek .photo-video { width:28px; height:28px; font-size:12px; }
+.photo-open video { display:block; width:100%; aspect-ratio:1; object-fit:cover; background:#1f2523; }
+.pc .folder-meta { overflow-wrap:anywhere; }
+#viewer { width:min(1100px, calc(100% - 40px)); }
+#viewer-img, #viewer-video { display:block; width:100%; max-height:80vh; object-fit:contain; margin-top:10px; background:#000; border-radius:8px; }
+@media(max-width:640px) { .pc-peek { grid-template-columns:repeat(4, 1fr); } .pc-peek .photo:nth-child(n+5) { display:none; } }

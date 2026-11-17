@@ -7,12 +7,12 @@
   <title>업무 사진 PC 받기</title>
   <link rel="manifest" href="manifest-pc.webmanifest">
   <link rel="icon" href="icons/icon-192.png">
-  <link rel="stylesheet" href="style.css?v=11">
-  <link rel="stylesheet" href="pc.css?v=11">
+  <link rel="stylesheet" href="style.css?v=12">
+  <link rel="stylesheet" href="pc.css?v=12">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js" defer></script>
-  <script src="config.js?v=11" defer></script>
-  <script src="relay.js?v=11" defer></script>
-  <script src="pc.js?v=11" defer></script>
+  <script src="config.js?v=12" defer></script>
+  <script src="relay.js?v=12" defer></script>
+  <script src="pc.js?v=12" defer></script>
 </head>
 <body class="pc">
   <header class="top">
@@ -49,10 +49,17 @@
     </section>
 
     <section class="card pc-step" aria-labelledby="step3">
-      <div class="heading"><h2 id="step3"><span class="num">3</span> 받은 사진</h2><span id="recv-count" class="count">0장</span></div>
-      <p class="help">이 화면(앱)이 켜져 있으면 바로 저장돼요. 꺼져 있을 때 보낸 사진은 다음에 켜면 저장돼요.</p>
-      <ul id="recv-log" class="recv-log"></ul>
+      <div class="heading"><h2 id="step3"><span class="num">3</span> 받은 사진 · 목적별</h2><span id="recv-count" class="count"></span></div>
+      <p class="help">저장 폴더 안을 목적별로 보여 줘요. 폴더를 누르면 날짜별로 펼쳐지고, 사진을 누르면 크게 보여요.<br>이 화면(앱)이 켜져 있으면 바로 저장돼요. 꺼져 있을 때 보낸 사진은 다음에 켜면 저장돼요.</p>
+      <div class="pc-actions"><button type="button" id="refresh-album">새로 고침</button></div>
+      <p id="album-empty" class="empty">저장할 폴더를 고르면 받은 사진이 목적별로 보여요.</p>
+      <div id="album" class="album"></div>
     </section>
   </main>
+
+  <dialog id="viewer" aria-label="크게 보기">
+    <div class="dialog-top"><p id="viewer-caption"></p><button type="button" id="close-viewer">닫기</button></div>
+    <img id="viewer-img" alt="받은 사진"><video id="viewer-video" controls playsinline hidden></video>
+  </dialog>
 </body>
 </html>
