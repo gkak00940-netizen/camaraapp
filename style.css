@@ -264,3 +264,9 @@ dialog h2 { font-size:21px; }
 .browser-warn p { flex:1; margin:0; display:flex; flex-direction:column; gap:2px; line-height:1.45; font-size:14px; }
 .browser-warn b { font-size:16px; }
 .browser-warn button { flex:none; min-height:46px; padding:6px 14px; }
+
+/* 휴대폰에 저장 버튼 (보내기 칸 아래) */
+.save-device { display:flex; align-items:center; gap:12px; width:100%; min-height:54px; margin-top:8px; padding:8px 14px; border:1px solid #b9cde6; border-radius:12px; background:white; color:var(--navy); text-align:left; }
+.save-device > span:first-child { font-size:22px; }
+.save-device b { display:block; font-size:16px; }
+.save-device small { display:block; font-size:12px; font-weight:500; color:var(--muted); }

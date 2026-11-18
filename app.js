@@ -128,6 +128,7 @@ function controls() {
   sizeAdvice(pickedNow);
   document.querySelectorAll('.share').forEach(button => { button.disabled = busy; });
   $('save-photos').disabled = busy || !count;
+  $('save-device').disabled = busy || !count;
   $('delete-selected').disabled = busy || !count;
   $('clear-selection').disabled = busy;
   $('import-photos').disabled = busy || !db;
@@ -1022,16 +1023,26 @@ $('browser-chrome').addEventListener('click', openInChrome);
 
 // 공유가 안 될 때: 사진을 휴대폰에 저장해서 갤러리에서 보내게 해요. (갤러리가 잘 알아보는 단순한 영문 이름으로)
 $('save-photos').addEventListener('click', async () => {
-  const picked = selectedPhotos(); if (!picked.length) { shareStatus('먼저 저장할 사진을 체크해 주세요.', true); return; }
-  const files = photoFiles(picked, { plainName:true });
-  for (const file of files) {
-    const url = URL.createObjectURL(file); const link = document.createElement('a');
-    link.href = url; link.download = file.name; document.body.append(link); link.click(); link.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 10000);
-    await new Promise(resolve => setTimeout(resolve, 400));
-  }
-  shareStatus(`사진 ${files.length}장을 휴대폰에 저장했어요. 갤러리나 '내 파일 > 다운로드'에서 보낼 수 있어요.`);
+  saveToDevice();
 });
+// 휴대폰에 저장: 보내기 칸에 늘 있는 버튼. 한 장씩 차례로 내려받아 갤러리 '다운로드' 앨범에 들어가요.
+$('save-device').addEventListener('click', () => saveToDevice());
+async function saveToDevice() {
+  if (busy) return;
+  const picked = selectedPhotos(); if (!picked.length) { shareStatus('먼저 저장할 사진을 체크해 주세요.', true); return; }
+  busy = true; controls();
+  try {
+    const files = photoFiles(picked, { plainName:true });
+    for (const [i, file] of files.entries()) {
+      shareStatus(`휴대폰에 저장하는 중… ${i + 1} / ${files.length}`);
+      const url = URL.createObjectURL(file); const link = document.createElement('a');
+      link.href = url; link.download = file.name; document.body.append(link); link.click(); link.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 30000);
+      await new Promise(resolve => setTimeout(resolve, 500));
+    }
+    shareStatus(`${countLabel(picked)}을 휴대폰에 저장했어요. 갤러리의 ‘다운로드’ 앨범(또는 내 파일 › 다운로드)에서 볼 수 있어요.${files.length > 1 ? ' 처음에 크롬이 “여러 파일 다운로드”를 물으면 허용을 눌러 주세요.' : ''}`);
+  } finally { busy = false; controls(); }
+}
 
 document.querySelectorAll('.share').forEach(button => button.addEventListener('click', async () => {
   if (busy) return;

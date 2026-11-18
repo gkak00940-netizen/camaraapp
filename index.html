@@ -10,10 +10,10 @@
   <link rel="apple-touch-icon" href="icons/icon-192.png">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="업무 사진">
-  <link rel="stylesheet" href="style.css?v=18">
-  <script src="config.js?v=18" defer></script>
-  <script src="relay.js?v=18" defer></script>
-  <script src="app.js?v=18" defer></script>
+  <link rel="stylesheet" href="style.css?v=19">
+  <script src="config.js?v=19" defer></script>
+  <script src="relay.js?v=19" defer></script>
+  <script src="app.js?v=19" defer></script>
 </head>
 <body>
   <!-- 크롬이 아닌 브라우저(삼성 인터넷 등)에서 열면 맨 위에 나와요 -->
@@ -88,6 +88,8 @@
         <button type="button" class="share" data-target="sms"><span class="share-icon" aria-hidden="true">✆</span>문자</button>
         <button type="button" class="share" data-target="other"><span class="share-icon" aria-hidden="true">⋯</span>다른 앱</button>
       </div>
+      <!-- 휴대폰에 저장: 언제나 보여요 (갤러리 '다운로드' 앨범에 들어가요) -->
+      <button type="button" id="save-device" class="save-device"><span aria-hidden="true">📥</span><span><b>휴대폰에 저장</b><small>갤러리의 ‘다운로드’ 앨범에 들어가요</small></span></button>
     </div>
     <p id="share-status" class="share-status" role="status" hidden></p>
     <div id="share-fallback" class="share-fallback" hidden>
