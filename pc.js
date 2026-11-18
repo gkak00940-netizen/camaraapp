@@ -187,10 +187,23 @@ async function renderAlbum() {
   let folders;
   try { folders = await readAlbum(); }
   catch { $('album-empty').hidden = false; $('album-empty').textContent = '저장 폴더를 읽지 못했어요. “폴더 다시 연결”을 눌러 주세요.'; return; }
+  // 목록에서 뺀 것은 이 화면에서만 숨겨요. (저장 폴더의 파일은 그대로) 그 뒤에 새로 받은 사진은 다시 보여요.
+  const hidden = hiddenState();
+  const totalAll = folders.reduce((n, f) => n + f.files.length, 0);
+  folders.forEach(f => {
+    const after = Math.max(hidden.all || 0, hidden.folders[f.name] || 0);
+    f.files = f.files.filter(item => item.file.lastModified > after);
+  });
   const all = folders.flatMap(f => f.files);
-  $('recv-count').textContent = all.length ? `전체 ${countLabel(all)}` : '';
+  const hiddenCount = totalAll - all.length;
+  $('recv-count').textContent = all.length ? `목록 ${countLabel(all)}` : '';
+  $('show-hidden').hidden = !hiddenCount;
+  $('show-hidden').textContent = `숨긴 것 다시 보기 (${hiddenCount}개)`;
+  $('clear-list').hidden = !all.length;
   $('album-empty').hidden = folders.some(f => f.files.length);
-  $('album-empty').textContent = '아직 받은 사진이 없어요. 휴대폰에서 “회사 PC로 보내기”를 눌러 보세요.';
+  $('album-empty').textContent = hiddenCount
+    ? '목록을 비웠어요. 새로 받은 사진만 여기 보여요. (저장 폴더의 파일은 그대로 있어요)'
+    : '아직 받은 사진이 없어요. 휴대폰에서 “회사 PC로 보내기”를 눌러 보세요.';
   const frag = document.createDocumentFragment();
   folders.filter(f => f.files.length).forEach(folder => {
     folder.files.forEach(item => { item.folder = folder.name; });
@@ -204,7 +217,15 @@ async function renderAlbum() {
     head.append(el('span', 'folder-name', `📁 ${folder.name}`), el('span', 'folder-count', countLabel(list)),
       el('span', 'folder-meta', `${first === last ? '' : `${first} ~ `}${last}${rel} · ${days}일 · ${root.name}\\${folder.name}`));
     head.addEventListener('click', () => { if (openFolders.has(folder.name)) openFolders.delete(folder.name); else openFolders.add(folder.name); renderAlbum(); });
-    box.append(head);
+    // 폴더 머리 오른쪽 "✕ 빼기": 이 목적만 목록에서 빼요. (파일은 그대로)
+    const top = el('div', 'folder-top'); top.append(head);
+    const hide = el('button', 'folder-edit folder-hide'); hide.type = 'button';
+    hide.innerHTML = '<span aria-hidden="true">✕</span><small>빼기</small>';
+    hide.setAttribute('aria-label', `${folder.name}을 목록에서 빼기 (파일은 그대로)`);
+    hide.title = '목록에서만 빼요. 저장 폴더의 파일은 그대로예요.';
+    hide.addEventListener('click', () => { const h = hiddenState(); h.folders[folder.name] = Date.now(); saveHidden(h); openFolders.delete(folder.name); renderAlbum(); });
+    top.append(hide);
+    box.append(top);
     if (!isOpen) {
       const peek = el('div', 'folder-peek pc-peek');
       list.slice(0, 6).forEach(item => peek.append(thumb(item, false)));
@@ -230,6 +251,16 @@ async function renderAlbum() {
 // 여러 장이 연달아 들어올 때는 잠깐 모았다가 한 번에 다시 그려요.
 function refreshSoon() { clearTimeout(galleryTimer); galleryTimer = setTimeout(renderAlbum, 700); }
 $('refresh-album').addEventListener('click', renderAlbum);
+
+/* ---------- 목록 정리: 목록에서만 숨기기 (파일은 지우지 않아요) ---------- */
+const HIDE_KEY = 'work-photos-pclist-hide-v1';
+function hiddenState() { try { const h = JSON.parse(localStorage.getItem(HIDE_KEY)); return { all:h?.all || 0, folders:h?.folders || {} }; } catch { return { all:0, folders:{} }; } }
+function saveHidden(h) { try { localStorage.setItem(HIDE_KEY, JSON.stringify(h)); } catch { /* 무시 */ } }
+$('clear-list').addEventListener('click', () => {
+  if (!confirm('받은 사진 목록을 비울까요?\n\n이 화면의 목록에서만 사라지고, 저장 폴더의 파일은 그대로 있어요.\n앞으로 새로 받는 사진은 다시 목록에 보여요.')) return;
+  saveHidden({ all:Date.now(), folders:{} }); openFolders.clear(); renderAlbum();
+});
+$('show-hidden').addEventListener('click', () => { saveHidden({ all:0, folders:{} }); renderAlbum(); });
 // 탐색기에서 파일을 옮기거나 지운 뒤 이 창으로 돌아오면 다시 읽어요.
 window.addEventListener('focus', () => { if (root) refreshSoon(); });
 
