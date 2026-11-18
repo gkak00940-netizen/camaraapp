@@ -144,7 +144,16 @@ body.has-bar main { padding-bottom:110px; }
 .send-arrow { display:inline-grid; place-items:center; width:26px; height:26px; border-radius:50%; background:var(--navy); color:white; font-size:15px; }
 .send-sub { margin-left:auto; font-size:14px; font-weight:600; color:var(--muted); }
 .share-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:6px; }
-.share { flex-direction:row !important; justify-content:flex-start; gap:8px !important; min-height:52px !important; padding:6px 8px !important; font-size:14px !important; }
+.share { flex-direction:column !important; justify-content:center; gap:3px !important; min-height:76px !important; padding:8px 4px !important; font-size:14px !important; line-height:1.2; }
+.share .share-name { font-weight:800; }
+.share small { font-size:11px; font-weight:600; color:var(--muted); white-space:nowrap; }
+.share-pc { background:var(--navy) !important; border-color:var(--navy) !important; color:white !important; }
+.share-pc small { color:#ffffffd0; }
+[data-target="pc"] .share-icon { background:#ffffff26; font-size:16px; }
+/* 사진마다 보낸 곳 표시 */
+.photo-sent { position:absolute; left:5px; bottom:5px; max-width:calc(100% - 10px); padding:2px 6px; border-radius:6px; background:#2e7d32; color:white; font-size:11px; font-weight:800; line-height:1.3; white-space:normal; word-break:keep-all; pointer-events:none; }
+/* 아래 띠(목적 이름·영상 길이)가 있으면 그 위로 올려요 */
+.photo:has(.photo-time) .photo-sent { bottom:30px; }
 [data-target="gallery"] .share-icon { background:#f59e0b; font-size:16px; }
 .send-pc { display:flex; align-items:center; gap:12px; width:100%; min-height:60px; margin-bottom:8px; padding:8px 14px; border:0; border-radius:12px; background:var(--navy); color:white; text-align:left; }
 .send-pc .pc-icon { font-size:24px; }
@@ -272,3 +281,13 @@ dialog h2 { font-size:21px; }
 .save-device > span:first-child { font-size:22px; }
 .save-device b { display:block; font-size:16px; }
 .save-device small { display:block; font-size:12px; font-weight:500; color:var(--muted); }
+
+/* 날짜별 보기: 보낸 곳은 아래 띠 안에 */
+.photo.tagged .photo-sent { display:none; }
+.band-sent { display:block; margin-top:2px; font-size:11px; font-weight:800; color:#a7f3b5; line-height:1.25; word-break:keep-all; }
+/* 목적 폴더 머리: 장수 글씨를 줄여 목적 이름이 좁아지지 않게 */
+.folder-count { font-size:15px !important; white-space:nowrap; }
+.folder-name { word-break:keep-all; }
+/* 목적 폴더 머리: 이름을 한 줄로 넓게, 장수는 그 아래 줄에 */
+.folder-head { grid-template-columns:1fr !important; gap:2px !important; }
+.folder-count { grid-row:auto !important; justify-self:start; align-self:auto !important; font-size:14px !important; color:var(--navy); }

@@ -107,6 +107,25 @@ function sizeAdvice(list) {
   note.textContent = text; note.className = warn ? 'size-note warn' : 'size-note';
 }
 
+// 보낸 곳 기록: 사진마다 어디로 보냈는지 남겨 두고 사진 위에 "✓PC·카톡"처럼 보여 줘요.
+// (공유 화면에서는 실제로 어느 앱을 골랐는지 알 수 없어서, 누른 버튼 이름으로 기록해요)
+const PLACE_NAMES = { kakao:'카톡', sms:'문자', email:'메일', other:'다른 앱', drive:'드라이브' };
+const PLACE_ORDER = ['PC', '갤러리', '카톡', '문자', '메일', '드라이브', '다른 앱', '기타'];
+function sentPlaces(item) {
+  const list = new Set(item.sentTo || []);
+  if (item.pcSent) list.add('PC');
+  return [...list].sort((a, b) => PLACE_ORDER.indexOf(a) - PLACE_ORDER.indexOf(b));
+}
+const addPlace = (item, place) => [...new Set([...sentPlaces(item), place])];
+async function markSent(items, place) {
+  const updated = items.map(item => ({ ...item, sentTo:addPlace(item, place) }));
+  try { await write('photos', t => updated.forEach(item => t.objectStore('photos').put(item))); }
+  catch { return; }
+  const byId = new Map(updated.map(item => [item.id, item]));
+  photos = photos.map(p => byId.get(p.id) || p);
+  renderPhotos();
+}
+
 function setBarOpen(open) {
   $('bar-more').hidden = !open;
   $('action-bar').classList.toggle('open', open);
@@ -270,13 +289,17 @@ function photoCard(photo, { tag }) {
     const name = document.createElement('b'); name.className = 'photo-purpose'; name.textContent = purposeName(photo);
     name.style.setProperty('--dot', purposeColor(photo.purpose));
     time.append(name);
+    // 날짜별 보기: 보낸 곳도 이 띠 안에 함께 적어요 (사진 위 표시와 겹치지 않게)
+    const sentHere = sentPlaces(photo);
+    if (sentHere.length) { const ss = document.createElement('span'); ss.className = 'band-sent'; ss.textContent = `✓${sentHere.join('·')}`; time.append(ss); }
     card.style.setProperty('--dot', purposeColor(photo.purpose)); card.classList.add('tagged');
   }
   if (video) { const d = document.createElement('span'); d.className = 'photo-dur'; d.textContent = durLabel(photo.duration || 0); time.append(d); }
   card.append(open, label);
   if (time.childNodes.length) card.append(time);
   if (photo.received) { const r = document.createElement('span'); r.className = 'photo-recv'; r.textContent = '받음'; card.append(r); }
-  if (photo.pcSent) { const s = document.createElement('span'); s.className = 'photo-pc'; s.textContent = 'PC✓'; s.title = 'PC로 보냄'; card.append(s); }
+  const sent = sentPlaces(photo);
+  if (sent.length) { const s = document.createElement('span'); s.className = 'photo-sent'; s.textContent = `✓${sent.join('·')}`; s.title = `보낸 곳: ${sent.join(', ')}`; card.append(s); }
   return card;
 }
 
@@ -683,7 +706,7 @@ function renderPcButton() {
   const on = window.Relay?.configured();
   $('send-pc').hidden = !on; $('pc-link').hidden = !on; $('pc-card').hidden = !on;
   const link = pcLink();
-  $('send-pc-label').textContent = link ? `${link.name}로 보내기` : '회사 PC로 보내기';
+  $('send-pc-label').textContent = link ? link.name : '회사 PC';
   $('pc-card').classList.toggle('linked', !!link);
   $('pc-card-title').textContent = link ? `✓ ${link.name}와 연결됨` : '회사 PC 연결 안 됨';
   $('pc-card-sub').textContent = link ? `${new Date(link.at).toLocaleDateString('ko-KR')}에 연결 · 다시 하려면 “바꾸기”` : 'PC 받기 화면의 QR을 이 앱으로 찍어 연결해요';
@@ -788,7 +811,7 @@ $('send-pc').addEventListener('click', async () => {
       await Relay.send(link.box, photo, purposeName(photo), photoFiles([photo])[0].name.replace(/_1(\.\w+)$/, '$1'),
         (part, parts) => { if (parts > 1) shareStatus(`${link.name}로 보내는 중… ${done + 1} / ${picked.length} (${Math.round(part / parts * 100)}%)`); });
       done++;
-      const updated = { ...photo, pcSent:Date.now() };
+      const updated = { ...photo, pcSent:Date.now(), sentTo:addPlace(photo, 'PC') };
       await write('photos', t => t.objectStore('photos').put(updated));
       photos = photos.map(p => p.id === updated.id ? updated : p);
     }
@@ -1040,13 +1063,14 @@ async function saveToDevice() {
       setTimeout(() => URL.revokeObjectURL(url), 30000);
       await new Promise(resolve => setTimeout(resolve, 500));
     }
+    await markSent(picked, '갤러리');
     shareStatus(`${countLabel(picked)}을 갤러리에 저장했어요. 갤러리의 ‘다운로드’ 앨범(또는 내 파일 › 다운로드)에서 볼 수 있어요.${files.length > 1 ? ' 처음에 크롬이 “여러 파일 다운로드”를 물으면 허용을 눌러 주세요.' : ''}`);
   } finally { busy = false; controls(); }
 }
 
 document.querySelectorAll('.share').forEach(button => button.addEventListener('click', async () => {
   if (busy) return;
-  if (button.dataset.target === 'gallery') return; // 갤러리는 아래 saveToDevice가 맡아요
+  if (button.dataset.target === 'gallery' || button.dataset.target === 'pc') return; // 갤러리·회사 PC는 각자 따로 처리해요
   const target = TARGETS[button.dataset.target];
   const picked = selectedPhotos();
   if (!picked.length) { shareStatus(photos.length ? '먼저 보낼 사진을 체크해 주세요. (사진 왼쪽 위 네모 칸, 또는 목적 폴더를 펼쳐 "이 목적 선택")' : '보낼 사진이 없어요. 먼저 사진을 찍어 주세요.', true); return; }
@@ -1078,6 +1102,7 @@ document.querySelectorAll('.share').forEach(button => button.addEventListener('c
   busy = true; controls(); showHint(target.hint);
   try {
     await navigator.share(data);
+    await markSent(picked, PLACE_NAMES[button.dataset.target] || '기타');
     $('share-fallback').hidden = true;
     shareStatus('보낼 앱으로 사진을 넘겼어요. 받은 것을 확인한 뒤 지워 주세요.');
   } catch (error) {
@@ -1169,7 +1194,7 @@ function renderViewer() {
   const track = $('viewer-track'); track.classList.remove('animate'); track.style.transform = '';
   track.replaceChildren(slideFor(viewerList[viewerIndex - 1], false), slideFor(item, true), slideFor(viewerList[viewerIndex + 1], false));
   $('viewer-purpose').textContent = purposeName(item);
-  $('viewer-meta').textContent = `${dayLabel(item.created)} ${timeLabel(item.created)}${item.kind === 'video' ? ` · 영상 ${durLabel(item.duration || 0)}` : ''} · ${fileExt(item).slice(1).toUpperCase()} · ${sizeLabel(item.blob.size)}${item.received ? ' · 받음' : ''}${item.pcSent ? ' · PC✓' : ''}`;
+  $('viewer-meta').textContent = `${dayLabel(item.created)} ${timeLabel(item.created)}${item.kind === 'video' ? ` · 영상 ${durLabel(item.duration || 0)}` : ''} · ${fileExt(item).slice(1).toUpperCase()} · ${sizeLabel(item.blob.size)}${item.received ? ' · 받음' : ''}${sentPlaces(item).length ? ` · 보냄: ${sentPlaces(item).join('·')}` : ''}`;
   $('viewer-count').textContent = `${viewerIndex + 1} / ${viewerList.length}`;
   $('viewer-prev').disabled = viewerIndex === 0; $('viewer-next').disabled = viewerIndex === viewerList.length - 1;
   updateViewerSelect();

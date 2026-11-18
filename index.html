@@ -10,10 +10,10 @@
   <link rel="apple-touch-icon" href="icons/icon-192.png">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="업무 사진">
-  <link rel="stylesheet" href="style.css?v=20">
-  <script src="config.js?v=20" defer></script>
-  <script src="relay.js?v=20" defer></script>
-  <script src="app.js?v=20" defer></script>
+  <link rel="stylesheet" href="style.css?v=22">
+  <script src="config.js?v=22" defer></script>
+  <script src="relay.js?v=22" defer></script>
+  <script src="app.js?v=22" defer></script>
 </head>
 <body>
   <!-- 크롬이 아닌 브라우저(삼성 인터넷 등)에서 열면 맨 위에 나와요 -->
@@ -80,15 +80,15 @@
     <p id="size-note" class="size-note" role="status"></p>
     <div class="send-box" role="group" aria-labelledby="send-title">
       <p class="send-title" id="send-title"><span class="send-arrow" aria-hidden="true">↗</span> 보내기 <span class="send-sub">보낼 곳을 누르세요</span></p>
-      <button type="button" id="send-pc" class="send-pc" hidden><span class="pc-icon" aria-hidden="true">🖥</span><span><b id="send-pc-label">회사 PC로 보내기</b><small>PC에 목적별 폴더로 저장돼요</small></span></button>
+      <!-- 보낼 곳 순서: 회사 PC · 갤러리 · 카카오톡 / 메시지 · 이메일 · 다른 앱 (3칸 2줄)
+           안내가 필요한 곳은 버튼 안에 작은 글씨로 함께 보여 줘요. -->
       <div class="share-grid">
-        <button type="button" class="share" data-target="drive"><span class="share-icon" aria-hidden="true">▲</span>드라이브</button>
-        <button type="button" class="share" data-target="kakao"><span class="share-icon" aria-hidden="true">●</span>카카오톡</button>
-        <button type="button" class="share" data-target="email"><span class="share-icon" aria-hidden="true">✉</span>이메일</button>
-        <button type="button" class="share" data-target="sms"><span class="share-icon" aria-hidden="true">✆</span>문자</button>
-        <!-- 갤러리: 휴대폰에 저장해요 (갤러리의 '다운로드' 앨범에 들어가요) -->
-        <button type="button" id="save-device" class="share" data-target="gallery"><span class="share-icon" aria-hidden="true">🖼</span>갤러리</button>
-        <button type="button" class="share" data-target="other"><span class="share-icon" aria-hidden="true">⋯</span>다른 앱</button>
+        <button type="button" id="send-pc" class="share share-pc" data-target="pc" hidden><span class="share-icon" aria-hidden="true">🖥</span><span class="share-name" id="send-pc-label">회사 PC</span><small>목적별 폴더로 저장</small></button>
+        <button type="button" id="save-device" class="share" data-target="gallery"><span class="share-icon" aria-hidden="true">🖼</span><span class="share-name">갤러리</span><small>다운로드 앨범</small></button>
+        <button type="button" class="share" data-target="kakao"><span class="share-icon" aria-hidden="true">●</span><span class="share-name">카카오톡</span></button>
+        <button type="button" class="share" data-target="sms"><span class="share-icon" aria-hidden="true">✆</span><span class="share-name">메시지</span><small>문자</small></button>
+        <button type="button" class="share" data-target="email"><span class="share-icon" aria-hidden="true">✉</span><span class="share-name">이메일</span></button>
+        <button type="button" class="share" data-target="other"><span class="share-icon" aria-hidden="true">⋯</span><span class="share-name">다른 앱</span><small>드라이브·퀵쉐어</small></button>
       </div>
     </div>
     <p id="share-status" class="share-status" role="status" hidden></p>
