@@ -10,12 +10,17 @@
   <link rel="apple-touch-icon" href="icons/icon-192.png">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="업무 사진">
-  <link rel="stylesheet" href="style.css?v=17">
-  <script src="config.js?v=17" defer></script>
-  <script src="relay.js?v=17" defer></script>
-  <script src="app.js?v=17" defer></script>
+  <link rel="stylesheet" href="style.css?v=18">
+  <script src="config.js?v=18" defer></script>
+  <script src="relay.js?v=18" defer></script>
+  <script src="app.js?v=18" defer></script>
 </head>
 <body>
+  <!-- 크롬이 아닌 브라우저(삼성 인터넷 등)에서 열면 맨 위에 나와요 -->
+  <div id="browser-warn" class="browser-warn" hidden role="alert">
+    <p><b>⚠ 크롬으로 열어 주세요</b><span id="browser-warn-text"></span></p>
+    <button type="button" id="browser-chrome" class="accent">크롬으로 열기</button>
+  </div>
   <header class="top">
     <div class="top-row"><span class="app-name">업무 사진</span><button type="button" id="install-app" class="ghost small" hidden>앱 설치</button></div>
     <h1 class="sr-only">업무 사진</h1>

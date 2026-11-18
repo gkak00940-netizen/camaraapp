@@ -972,10 +972,22 @@ function shareStatus(text, error = false) {
 // 카카오톡·네이버 등 앱 안에서 연 화면은 사진 공유가 안 돼요. 크롬으로 다시 열게 안내해요.
 const IN_APP = /KAKAOTALK|NAVER|Instagram|FBAN|FBAV|Line\/|DaumApps|; wv\)/i.test(navigator.userAgent);
 const IS_ANDROID = /Android/i.test(navigator.userAgent);
+// 삼성 인터넷 등 크롬이 아닌 브라우저: 사진 보내기·저장·PC 연결이 다르게 동작해서 문제가 생겨요.
+const BROWSER_NAME = /SamsungBrowser/i.test(navigator.userAgent) ? '삼성 인터넷'
+  : /Whale/i.test(navigator.userAgent) ? '네이버 웨일'
+  : /EdgA/i.test(navigator.userAgent) ? '엣지'
+  : /Firefox|FxiOS/i.test(navigator.userAgent) ? '파이어폭스'
+  : /OPR|Opera/i.test(navigator.userAgent) ? '오페라' : '';
+const NOT_CHROME = IS_ANDROID && (IN_APP || !!BROWSER_NAME);
+
+function openInChrome() {
+  const url = location.href.replace(/^https?:\/\//, '').split('#')[0];
+  location.href = `intent://${url}#Intent;scheme=https;package=com.android.chrome;S.browser_fallback_url=${encodeURIComponent('https://play.google.com/store/apps/details?id=com.android.chrome')};end`;
+}
 
 function showFallback(reason) {
   $('share-fallback').hidden = false;
-  $('open-chrome').hidden = !(IN_APP && IS_ANDROID);
+  $('open-chrome').hidden = !NOT_CHROME;
   shareStatus(reason, true);
 }
 
@@ -1005,15 +1017,13 @@ function pickedSummary(picked) {
   return names.length === 1 ? names[0] : `${names[0]} 외 ${names.length - 1}개 목적`;
 }
 
-$('open-chrome').addEventListener('click', () => {
-  const url = location.href.replace(/^https?:\/\//, '').split('#')[0];
-  location.href = `intent://${url}#Intent;scheme=https;package=com.android.chrome;end`;
-});
+$('open-chrome').addEventListener('click', openInChrome);
+$('browser-chrome').addEventListener('click', openInChrome);
 
-// 공유가 안 될 때: 사진을 휴대폰에 저장해서 갤러리에서 보내게 해요.
+// 공유가 안 될 때: 사진을 휴대폰에 저장해서 갤러리에서 보내게 해요. (갤러리가 잘 알아보는 단순한 영문 이름으로)
 $('save-photos').addEventListener('click', async () => {
   const picked = selectedPhotos(); if (!picked.length) { shareStatus('먼저 저장할 사진을 체크해 주세요.', true); return; }
-  const files = photoFiles(picked);
+  const files = photoFiles(picked, { plainName:true });
   for (const file of files) {
     const url = URL.createObjectURL(file); const link = document.createElement('a');
     link.href = url; link.download = file.name; document.body.append(link); link.click(); link.remove();
@@ -1147,7 +1157,7 @@ function renderViewer() {
   const track = $('viewer-track'); track.classList.remove('animate'); track.style.transform = '';
   track.replaceChildren(slideFor(viewerList[viewerIndex - 1], false), slideFor(item, true), slideFor(viewerList[viewerIndex + 1], false));
   $('viewer-purpose').textContent = purposeName(item);
-  $('viewer-meta').textContent = `${dayLabel(item.created)} ${timeLabel(item.created)}${item.kind === 'video' ? ` · 영상 ${durLabel(item.duration || 0)}` : ''} · ${sizeLabel(item.blob.size)}${item.received ? ' · 받음' : ''}${item.pcSent ? ' · PC✓' : ''}`;
+  $('viewer-meta').textContent = `${dayLabel(item.created)} ${timeLabel(item.created)}${item.kind === 'video' ? ` · 영상 ${durLabel(item.duration || 0)}` : ''} · ${fileExt(item).slice(1).toUpperCase()} · ${sizeLabel(item.blob.size)}${item.received ? ' · 받음' : ''}${item.pcSent ? ' · PC✓' : ''}`;
   $('viewer-count').textContent = `${viewerIndex + 1} / ${viewerList.length}`;
   $('viewer-prev').disabled = viewerIndex === 0; $('viewer-next').disabled = viewerIndex === viewerList.length - 1;
   updateViewerSelect();
@@ -1237,7 +1247,13 @@ async function initialize() {
     if (current) openFolders.add(current);
     render();
     notice(current ? `“${currentPurpose().name}” 목적이에요. 화면을 누르면 카메라가 켜져요.` : '맨 위에 촬영 목적을 입력하고 저장해 주세요.');
-    if (IN_APP) { notice('카카오톡 등 앱 안에서 열었어요. 보내기가 안 될 수 있으니 크롬으로 열어 주세요. (⋮ 메뉴 → 다른 브라우저로 열기)', true); }
+    // 크롬이 아닌 곳(삼성 인터넷·카톡 안 등)에서 열었으면 맨 위에 늘 경고를 보여 줘요.
+    if (NOT_CHROME) {
+      $('browser-warn').hidden = false;
+      $('browser-warn-text').textContent = IN_APP
+        ? '카카오톡 등 다른 앱 안에서 열었어요. 이 화면에서는 사진 보내기·저장·회사 PC 연결이 제대로 안 돼요.'
+        : `지금 “${BROWSER_NAME}”에서 열었어요. 이 앱은 크롬에서만 사진 보내기·저장·회사 PC 연결이 제대로 돼요.`;
+    }
     await receiveSharedPhotos();
     receivePairing(); renderPcButton();
   } catch { db = null; controls(); notice('보관함을 열지 못했어요. 일반 크롬 창에서 다시 열어 주세요. 비공개 모드에서는 저장이 안 될 수 있어요.', true); }
