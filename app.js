@@ -111,10 +111,32 @@ function sizeAdvice(list) {
 // (공유 화면에서는 실제로 어느 앱을 골랐는지 알 수 없어서, 누른 버튼 이름으로 기록해요)
 const PLACE_NAMES = { kakao:'카톡', sms:'문자', email:'메일', other:'다른 앱', drive:'드라이브' };
 const PLACE_ORDER = ['PC', '갤러리', '카톡', '문자', '메일', '드라이브', '다른 앱', '기타'];
+// 회사 PC는 "보냄"과 "PC가 받음"을 나눠 보여 줘요.
+//   wait = 보냈지만 PC 받기가 아직 안 받아 감 (PC 대기)
+//   lost = 7일이 지나 중계 저장소에서 지워짐 → 다시 보내야 해요
+//   done = PC가 목적별 폴더에 저장했어요 (✓PC). 예전에 보낸 사진(이 기능 전)도 done으로 봐요.
+function pcState(item) {
+  if (!item.pcSent && !(item.sentTo || []).includes('PC')) return null;
+  if (!item.pcWait) return 'done';
+  return Date.now() - item.pcSent > (window.Relay?.KEEP_MS || 7 * 864e5) ? 'lost' : 'wait';
+}
+const PC_STATE_TEXT = { wait:'PC 대기', lost:'PC 다시 보내기' };
 function sentPlaces(item) {
   const list = new Set(item.sentTo || []);
   if (item.pcSent) list.add('PC');
+  if (pcState(item) !== 'done') list.delete('PC');
   return [...list].sort((a, b) => PLACE_ORDER.indexOf(a) - PLACE_ORDER.indexOf(b));
+}
+// 사진 위(또는 날짜별 띠 안)에 붙이는 보낸 곳 표시: 초록 "✓PC·카톡", 주황 "PC 대기", 빨강 "PC 다시 보내기"
+function sentBadge(item, className) {
+  const sent = sentPlaces(item); const pc = pcState(item);
+  if (!sent.length && !PC_STATE_TEXT[pc]) return null;
+  const box = document.createElement('span'); box.className = className;
+  if (sent.length) { const ok = document.createElement('span'); ok.className = 'sent-ok'; ok.textContent = `✓${sent.join('·')}`; box.append(ok); }
+  if (PC_STATE_TEXT[pc]) { const w = document.createElement('span'); w.className = `sent-${pc}`; w.textContent = PC_STATE_TEXT[pc]; box.append(w); }
+  box.title = [sent.length ? `보낸 곳: ${sent.join(', ')}` : '', pc === 'wait' ? 'PC로 보냈고, PC 받기를 열면 저장돼요' : '',
+    pc === 'lost' ? '7일 동안 PC가 받지 않아 다시 보내야 해요' : ''].filter(Boolean).join(' · ');
+  return box;
 }
 const addPlace = (item, place) => [...new Set([...sentPlaces(item), place])];
 async function markSent(items, place) {
@@ -290,16 +312,16 @@ function photoCard(photo, { tag }) {
     name.style.setProperty('--dot', purposeColor(photo.purpose));
     time.append(name);
     // 날짜별 보기: 보낸 곳도 이 띠 안에 함께 적어요 (사진 위 표시와 겹치지 않게)
-    const sentHere = sentPlaces(photo);
-    if (sentHere.length) { const ss = document.createElement('span'); ss.className = 'band-sent'; ss.textContent = `✓${sentHere.join('·')}`; time.append(ss); }
+    const sentHere = sentBadge(photo, 'band-sent');
+    if (sentHere) time.append(sentHere);
     card.style.setProperty('--dot', purposeColor(photo.purpose)); card.classList.add('tagged');
   }
   if (video) { const d = document.createElement('span'); d.className = 'photo-dur'; d.textContent = durLabel(photo.duration || 0); time.append(d); }
   card.append(open, label);
   if (time.childNodes.length) card.append(time);
   if (photo.received) { const r = document.createElement('span'); r.className = 'photo-recv'; r.textContent = '받음'; card.append(r); }
-  const sent = sentPlaces(photo);
-  if (sent.length) { const s = document.createElement('span'); s.className = 'photo-sent'; s.textContent = `✓${sent.join('·')}`; s.title = `보낸 곳: ${sent.join(', ')}`; card.append(s); }
+  const sent = sentBadge(photo, 'photo-sent');
+  if (sent) card.append(sent);
   return card;
 }
 
@@ -707,7 +729,7 @@ function parsePairing(text) {
 function savePairing({ box, name }) {
   try { localStorage.setItem(PC_KEY, JSON.stringify({ box, name, at:Date.now() })); }
   catch { notice('연결을 저장하지 못했어요. 크롬 설정에서 이 사이트의 저장을 막지 않았는지 확인해 주세요.', true); return false; }
-  renderPcButton();
+  renderPcButton(); watchPcReceipts();
   notice(`“${name}”와 연결했어요. 이제 사진을 고르고 “${name}로 보내기”를 누르면 PC에 목적별 폴더로 저장돼요.`);
   return true;
 }
@@ -816,6 +838,46 @@ $('pair-unlink').addEventListener('click', () => {
   $('pair-dialog').close(); renderPcButton(); notice('회사 PC와 연결을 끊었어요.');
 });
 
+/* ---------- PC가 받았는지 확인하기 (PC 대기 → ✓PC) ---------- */
+let ackWatch = null; let ackBox = '';
+async function watchPcReceipts() {
+  const link = pcLink();
+  if (!link || !window.Relay?.configured() || !db) return;
+  if (!photos.some(p => p.pcWait && p.pcBox === link.box)) return; // 기다리는 사진이 없으면 지켜보지 않아요
+  if (ackWatch && ackBox === link.box) return;
+  ackWatch?.(); ackWatch = null; ackBox = link.box;
+  try { ackWatch = await Relay.watchAcks(link.box, markPcReceived); } catch { ackBox = ''; }
+}
+async function markPcReceived(ids) {
+  const want = new Set(ids);
+  const updated = photos.filter(p => want.has(p.id) && p.pcWait).map(p => ({ ...p, pcWait:false, pcGot:Date.now() }));
+  const mine = new Set(photos.filter(p => want.has(p.id)).map(p => p.id)); // 이미 받음 처리된 것도 표시는 지워요
+  if (updated.length) {
+    try { await write('photos', t => updated.forEach(item => t.objectStore('photos').put(item))); }
+    catch { return new Set(); }
+    const byId = new Map(updated.map(item => [item.id, item]));
+    photos = photos.map(p => byId.get(p.id) || p);
+    renderPhotos();
+    // 크게 보기 중이면 위쪽 글씨만 바꿔요 (보고 있는 영상이 멈추지 않게)
+    viewerList = viewerList.map(p => byId.get(p.id) || p);
+    if (!$('viewer').hidden && viewerList[viewerIndex]) $('viewer-meta').textContent = viewerMeta(viewerList[viewerIndex]);
+  }
+  if (!photos.some(p => p.pcWait)) { ackWatch?.(); ackWatch = null; ackBox = ''; }
+  return mine;
+}
+// 7일이 지나도 PC가 안 받아 간 사진은 중계 저장소에서 지워 둬요. (휴대폰 원본은 그대로, 표시는 "PC 다시 보내기")
+async function cleanExpiredPcSends() {
+  if (!window.Relay?.configured() || !db) return;
+  const old = photos.filter(p => p.pcWait && !p.pcCleaned && p.pcBox && pcState(p) === 'lost');
+  if (!old.length) return;
+  const cleaned = [];
+  for (const p of old) { try { await Relay.forget(p.pcBox, p.id, p.pcParts); cleaned.push({ ...p, pcCleaned:true }); } catch { break; } }
+  if (!cleaned.length) return;
+  try { await write('photos', t => cleaned.forEach(item => t.objectStore('photos').put(item))); } catch { return; }
+  const byId = new Map(cleaned.map(item => [item.id, item]));
+  photos = photos.map(p => byId.get(p.id) || p);
+}
+
 $('send-pc').addEventListener('click', async () => {
   if (busy) return;
   const picked = selectedPhotos(); if (!picked.length) return;
@@ -827,16 +889,18 @@ $('send-pc').addEventListener('click', async () => {
   try {
     for (const photo of picked) {
       shareStatus(`${link.name}로 보내는 중… ${done + 1} / ${picked.length}`);
-      await Relay.send(link.box, photo, purposeName(photo), photoFiles([photo])[0].name.replace(/_1(\.\w+)$/, '$1'),
+      const parts = await Relay.send(link.box, photo, purposeName(photo), photoFiles([photo])[0].name.replace(/_1(\.\w+)$/, '$1'),
         (part, parts) => { if (parts > 1) shareStatus(`${link.name}로 보내는 중… ${done + 1} / ${picked.length} (${Math.round(part / parts * 100)}%)`); });
       done++;
-      const updated = { ...photo, pcSent:Date.now(), sentTo:addPlace(photo, 'PC') };
+      // PC가 받았다는 표시가 오기 전까지는 "PC 대기"예요.
+      const updated = { ...photo, pcSent:Date.now(), pcWait:true, pcParts:parts, pcBox:link.box, pcCleaned:false, sentTo:addPlace(photo, 'PC') };
       await write('photos', t => t.objectStore('photos').put(updated));
       photos = photos.map(p => p.id === updated.id ? updated : p);
     }
     renderPhotos();
     // 선택은 그대로 둬서, PC에서 확인한 뒤 바로 아래 "삭제"로 휴대폰 공간을 비울 수 있게 해요.
-    shareStatus(`${link.name}로 ${done}개를 보냈어요. PC 받기 앱이 켜져 있으면 바로 목적별 폴더에 저장돼요. (꺼져 있으면 다음에 켤 때 저장돼요)`);
+    watchPcReceipts();
+    shareStatus(`✓ ${link.name}로 ${done}개를 보냈어요. PC 받기를 열면 목적별 폴더에 저장되고, 사진 위 “PC 대기”가 “✓PC”로 바뀌어요. (${Relay.KEEP_DAYS}일 안에 PC 받기를 안 열면 다시 보내야 해요)`);
   } catch (error) {
     shareStatus(`${done ? `${done}장은 보냈지만, ` : ''}PC로 보내지 못했어요. 인터넷 연결을 확인하고 다시 눌러 주세요.${error?.message === 'not-configured' ? ' (중계 설정 없음)' : ''}`, true);
   } finally { busy = false; controls(); renderPhotos(); }
@@ -1207,6 +1271,7 @@ function slideFor(item, active) {
   return slide;
 }
 
+const viewerMeta = item => `${dayLabel(item.created)} ${timeLabel(item.created)}${item.kind === 'video' ? ` · 영상 ${durLabel(item.duration || 0)}` : ''} · ${fileExt(item).slice(1).toUpperCase()} · ${sizeLabel(item.blob.size)}${item.received ? ' · 받음' : ''}${sentPlaces(item).length ? ` · 보냄: ${sentPlaces(item).join('·')}` : ''}${PC_STATE_TEXT[pcState(item)] ? ` · ${PC_STATE_TEXT[pcState(item)]}` : ''}`;
 function renderViewer() {
   viewerUrls.forEach(u => URL.revokeObjectURL(u)); viewerUrls = [];
   const item = viewerList[viewerIndex];
@@ -1214,7 +1279,7 @@ function renderViewer() {
   const track = $('viewer-track'); track.classList.remove('animate'); track.style.transform = '';
   track.replaceChildren(slideFor(viewerList[viewerIndex - 1], false), slideFor(item, true), slideFor(viewerList[viewerIndex + 1], false));
   $('viewer-purpose').textContent = purposeName(item);
-  $('viewer-meta').textContent = `${dayLabel(item.created)} ${timeLabel(item.created)}${item.kind === 'video' ? ` · 영상 ${durLabel(item.duration || 0)}` : ''} · ${fileExt(item).slice(1).toUpperCase()} · ${sizeLabel(item.blob.size)}${item.received ? ' · 받음' : ''}${sentPlaces(item).length ? ` · 보냄: ${sentPlaces(item).join('·')}` : ''}`;
+  $('viewer-meta').textContent = viewerMeta(item);
   $('viewer-count').textContent = `${viewerIndex + 1} / ${viewerList.length}`;
   $('viewer-prev').disabled = viewerIndex === 0; $('viewer-next').disabled = viewerIndex === viewerList.length - 1;
   updateViewerSelect();
@@ -1314,6 +1379,9 @@ async function initialize() {
     }
     await receiveSharedPhotos();
     receivePairing(); renderPcButton();
+    watchPcReceipts(); cleanExpiredPcSends();
+    const lost = photos.filter(p => pcState(p) === 'lost').length;
+    if (lost) notice(`PC가 ${window.Relay?.KEEP_DAYS || 7}일 동안 받지 않은 사진이 ${lost}개 있어요. 사진 위 빨간 “PC 다시 보내기”를 골라 다시 보내 주세요. (사진은 휴대폰에 그대로 있어요)`, true);
   } catch { db = null; controls(); notice('보관함을 열지 못했어요. 일반 크롬 창에서 다시 열어 주세요. 비공개 모드에서는 저장이 안 될 수 있어요.', true); }
 }
 initialize();

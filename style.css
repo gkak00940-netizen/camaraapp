@@ -151,7 +151,11 @@ body.has-bar main { padding-bottom:110px; }
 .share-pc small { color:#ffffffd0; }
 [data-target="pc"] .share-icon { background:#ffffff26; font-size:16px; }
 /* 사진마다 보낸 곳 표시 */
-.photo-sent { position:absolute; left:5px; bottom:5px; max-width:calc(100% - 10px); padding:2px 6px; border-radius:6px; background:#2e7d32; color:white; font-size:11px; font-weight:800; line-height:1.3; white-space:normal; word-break:keep-all; pointer-events:none; }
+.photo-sent { position:absolute; left:5px; bottom:5px; max-width:calc(100% - 10px); display:flex; flex-wrap:wrap; gap:3px; font-size:11px; font-weight:800; line-height:1.3; white-space:normal; word-break:keep-all; pointer-events:none; }
+.photo-sent > span { padding:2px 6px; border-radius:6px; color:white; }
+.photo-sent .sent-ok { background:#2e7d32; }
+.photo-sent .sent-wait { background:#d97706; }   /* PC 대기: 보냈고 PC가 아직 안 받음 */
+.photo-sent .sent-lost { background:#c62828; }   /* 7일 지나 다시 보내야 함 */
 /* 아래 띠(목적 이름·영상 길이)가 있으면 그 위로 올려요 */
 .photo:has(.photo-time) .photo-sent { bottom:30px; }
 [data-target="gallery"] .share-icon { background:#f59e0b; font-size:16px; }
@@ -285,6 +289,9 @@ dialog h2 { font-size:21px; }
 /* 날짜별 보기: 보낸 곳은 아래 띠 안에 */
 .photo.tagged .photo-sent { display:none; }
 .band-sent { display:block; margin-top:2px; font-size:11px; font-weight:800; color:#a7f3b5; line-height:1.25; word-break:keep-all; }
+.band-sent > span + span { margin-left:5px; }
+.band-sent .sent-wait { color:#fcd34d; }
+.band-sent .sent-lost { color:#fca5a5; }
 /* 목적 폴더 머리: 장수 글씨를 줄여 목적 이름이 좁아지지 않게 */
 .folder-count { font-size:15px !important; white-space:nowrap; }
 .folder-name { word-break:keep-all; }
@@ -292,3 +299,8 @@ dialog h2 { font-size:21px; }
 .folder-head { grid-template-columns:1fr !important; gap:2px !important; }
 .folder-count { grid-row:auto !important; justify-self:start; align-self:auto !important; font-size:14px !important; color:var(--navy); }
 .share-tag { margin-left:6px; padding:2px 8px; border-radius:999px; background:var(--accent); color:#1b1400; font-size:12px; font-weight:800; vertical-align:2px; }
+/* 연결 창의 7일 안내 */
+.pair-keep { margin-top:6px; padding:8px 10px; border-radius:10px; background:#fff7e6; font-size:13px; }
+.pair-keep .tag-wait, .pair-keep .tag-ok { padding:0 5px; border-radius:5px; color:white; font-size:12px; }
+.pair-keep .tag-wait { background:#d97706; }
+.pair-keep .tag-ok { background:#2e7d32; }

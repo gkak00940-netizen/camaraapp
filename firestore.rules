@@ -1,18 +1,31 @@
 rules_version = '2';
 
-// 업무 사진 앱 중계 저장소 규칙
+// 바로샷 중계 저장소 규칙 (2026-11-18: 7일 자동 삭제·PC 받음 표시 추가)
 // - 사진은 boxes/{연결코드}/items 에만 잠깐 들어가고, PC 받기 앱이 저장한 뒤 지워요.
+// - PC가 받으면 boxes/{연결코드}/acks 에 "받았어요" 표시를 남기고, 휴대폰이 확인하면 지워요.
+// - expireAt(7일 뒤)이 지나면 Firebase TTL이 자동으로 지워요.
 // - 연결 코드(64자리 무작위)를 아는 휴대폰·PC만 그 상자에 쓰고 읽을 수 있어요.
 // - 다른 곳은 모두 막혀 있어요.
 service cloud.firestore {
   match /databases/{database}/documents {
     match /boxes/{box}/items/{item} {
       allow create: if box.size() >= 32
-        && request.resource.data.keys().hasOnly(['photo', 'part', 'parts', 'purpose', 'name', 'created', 'sent', 'data'])
+        && request.resource.data.keys().hasOnly(['photo', 'part', 'parts', 'purpose', 'name', 'created', 'sent', 'data', 'expireAt'])
         && request.resource.data.data is bytes
         && request.resource.data.data.size() <= 950000
         && request.resource.data.purpose is string && request.resource.data.purpose.size() <= 60
-        && request.resource.data.name is string && request.resource.data.name.size() <= 120;
+        && request.resource.data.name is string && request.resource.data.name.size() <= 120
+        && (!('expireAt' in request.resource.data)
+            || (request.resource.data.expireAt is timestamp
+                && request.resource.data.expireAt < request.time + duration.value(8, 'd')));
+      allow read, delete: if box.size() >= 32;
+    }
+    match /boxes/{box}/acks/{ack} {
+      allow create, update: if box.size() >= 32
+        && request.resource.data.keys().hasOnly(['photo', 'at', 'expireAt'])
+        && request.resource.data.photo is string && request.resource.data.photo.size() <= 64
+        && request.resource.data.expireAt is timestamp
+        && request.resource.data.expireAt < request.time + duration.value(8, 'd');
       allow read, delete: if box.size() >= 32;
     }
   }

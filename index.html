@@ -10,10 +10,10 @@
   <link rel="apple-touch-icon" href="icons/icon-192.png">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="바로샷">
-  <link rel="stylesheet" href="style.css?v=26">
-  <script src="config.js?v=26" defer></script>
-  <script src="relay.js?v=26" defer></script>
-  <script src="app.js?v=26" defer></script>
+  <link rel="stylesheet" href="style.css?v=27">
+  <script src="config.js?v=27" defer></script>
+  <script src="relay.js?v=27" defer></script>
+  <script src="app.js?v=27" defer></script>
 </head>
 <body>
   <!-- 크롬이 아닌 브라우저(삼성 인터넷 등)에서 열면 맨 위에 나와요 -->
@@ -145,6 +145,8 @@
     <p class="help">회사 PC에서 <b>PC 받기</b> 화면을 열고, 화면의 <b>QR</b>을 아래 네모 안에 비춰 주세요.</p>
     <div id="pair-scan" class="pair-scan"><video id="pair-video" playsinline muted></video><span class="pair-frame" aria-hidden="true"></span></div>
     <p id="pair-status" class="help" role="status"></p>
+    <p class="help pair-keep">💡 PC 받기가 꺼져 있어도 보낸 사진은 <b>7일 동안</b> 기다려요. 그 안에 PC 받기를 열면 자동으로 들어와요.
+      사진 위 <b class="tag-wait">PC 대기</b>는 아직 PC가 안 받은 것, <b class="tag-ok">✓PC</b>는 PC에 저장된 거예요.</p>
     <details id="pair-paste" class="pair-paste">
       <summary>QR이 안 찍히면: 연결 주소 붙여넣기</summary>
       <p class="help">PC 받기 화면의 <b>“연결 주소 복사”</b>를 누르고, 카톡 “나와의 채팅” 등으로 휴대폰에 보낸 뒤 그 주소를 길게 눌러 복사해서 아래에 붙여 넣으세요.</p>

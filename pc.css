@@ -36,3 +36,5 @@
 @media(max-width:640px) { .pc-peek { grid-template-columns:repeat(4, 1fr); } .pc-peek .photo:nth-child(n+5) { display:none; } }
 .pc-actions small { font-weight:500; color:var(--muted); }
 .folder-hide { color:var(--danger) !important; }
+/* 7일 안내 */
+.keep-note { margin:14px 0 0; padding:10px 14px; border-radius:10px; background:#fff7e6; color:#7a4b00; font-size:14px; line-height:1.6; }
