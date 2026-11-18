@@ -980,13 +980,25 @@ function showFallback(reason) {
 }
 
 // 파일 이름에 사진마다 자기 목적 이름을 붙여요. 받은 쪽(드라이브·PC)에서도 어느 목적 사진인지 바로 보여요.
-function fileExt(item) {
-  if (item.kind !== 'video') return '.jpg';
-  const type = item.blob.type || item.mime || '';
-  return type.includes('mp4') ? '.mp4' : type.includes('quicktime') ? '.mov' : '.webm';
+// 파일 형식(MIME)과 확장자를 실제 내용에 맞춰요. 예전에는 받은 PNG·WebP도 ".jpg"로 붙여 보내서
+// 카카오톡이 "지원하지 않는 형식"으로 처리한 적이 있어요.
+function mediaType(item) {
+  const type = (item.blob.type || item.mime || '').split(';')[0];
+  if (type) return type;
+  return item.kind === 'video' ? 'video/mp4' : 'image/jpeg';
 }
-function photoFiles(picked) {
-  return picked.map((photo, index) => new File([photo.blob], `${safeName(purposeName(photo))}_${fileStamp(photo.created)}_${index + 1}${fileExt(photo)}`, { type:photo.blob.type || (photo.kind === 'video' ? 'video/mp4' : 'image/jpeg'), lastModified:photo.created }));
+function fileExt(item) {
+  const type = mediaType(item);
+  return { 'image/jpeg':'.jpg', 'image/png':'.png', 'image/webp':'.webp', 'image/gif':'.gif',
+    'video/mp4':'.mp4', 'video/quicktime':'.mov', 'video/webm':'.webm' }[type] || (item.kind === 'video' ? '.mp4' : '.jpg');
+}
+// plainName: 카카오톡·문자처럼 다른 앱에 넘길 때는 한글·띄어쓰기·괄호 없는 단순한 영문 이름을 써요.
+// (일부 앱이 그런 이름을 사진으로 알아보지 못하고 "파일"로 받는 경우가 있어서)
+function photoFiles(picked, { plainName = false } = {}) {
+  return picked.map((photo, index) => {
+    const base = plainName ? (photo.kind === 'video' ? 'video' : 'photo') : safeName(purposeName(photo));
+    return new File([photo.blob], `${base}_${fileStamp(photo.created)}_${index + 1}${fileExt(photo)}`, { type:mediaType(photo), lastModified:photo.created });
+  });
 }
 function pickedSummary(picked) {
   const names = [...new Set(picked.map(purposeName))];
@@ -1019,7 +1031,11 @@ document.querySelectorAll('.share').forEach(button => button.addEventListener('c
   if (button.dataset.target === 'sms' && picked.some(isVideo)) { shareStatus('문자(MMS)는 용량 한도가 작아서 동영상을 보낼 수 없어요. 카카오톡·드라이브·회사 PC로 보내 주세요.', true); return; }
   if (button.dataset.target === 'email' && totalSize(picked) > EMAIL_LIMIT) { shareStatus(`합계 ${sizeLabel(totalSize(picked))}라 메일 첨부 한도(약 25MB)를 넘어요. Gmail이면 드라이브 링크로 바뀌어 보내져요. 공유 화면을 열게요.`); }
   if (button.dataset.target === 'sms' && picked.length > MAX_SMS) { shareStatus(`문자는 한 번에 ${MAX_SMS}장까지 보내 주세요. 많으면 드라이브나 카카오톡이 좋아요.`, true); return; }
-  const files = photoFiles(picked);
+  // 카카오톡: 사진과 영상을 섞어 보내면 카톡이 전부 "파일"로 받아요. 따로 보내게 안내해요.
+  const mixed = picked.some(isVideo) && picked.some(p => !isVideo(p));
+  if (button.dataset.target === 'kakao' && mixed) { shareStatus('카카오톡은 사진과 영상을 함께 보내면 “파일”로 받아져요. 사진만 먼저 보내고, 영상은 따로 보내 주세요. (선택 해제 후 나눠서 고르기)', true); return; }
+  const plain = button.dataset.target === 'kakao' || button.dataset.target === 'sms';
+  const files = photoFiles(picked, { plainName:plain });
   if (!navigator.share) {
     showFallback(IN_APP ? '카카오톡 등 앱 안에서 연 화면이라 보내기가 안 돼요. "크롬으로 열기"를 누르거나, 사진을 휴대폰에 저장해서 보내 주세요.' : '이 브라우저는 보내기를 지원하지 않아요. 휴대폰 크롬에서 열거나, 사진을 휴대폰에 저장해서 보내 주세요.');
     return;
