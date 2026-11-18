@@ -59,7 +59,7 @@ function openDatabase() {
     };
     request.onsuccess = () => resolve(request.result);
     request.onerror = () => reject(request.error);
-    request.onblocked = () => notice('다른 창의 업무 사진을 닫고 다시 열어 주세요.', true);
+    request.onblocked = () => notice('다른 창의 바로샷을 닫고 다시 열어 주세요.', true);
   });
 }
 function readAll(name) {
@@ -789,7 +789,7 @@ async function openPairing() {
         const text = await read($('pair-video'));
         const found = text && parsePairing(text);
         if (found) { stopPairScan(); $('pair-dialog').close(); savePairing(found); return; }
-        if (text) $('pair-status').textContent = '업무 사진 PC 받기 화면의 QR이 아니에요. PC 받기 화면의 QR을 비춰 주세요.';
+        if (text) $('pair-status').textContent = '바로샷 PC 받기 화면의 QR이 아니에요. PC 받기 화면의 QR을 비춰 주세요.';
       } catch { /* 다음 장면에서 다시 */ }
       pairTimer = setTimeout(tick, 250);
     };
@@ -976,7 +976,7 @@ $('confirm-import').addEventListener('click', async () => {
   finally { if (busy) { busy = false; render(); } $('confirm-import').disabled = false; $('cancel-import').disabled = false; }
 });
 
-// 다른 앱(카카오톡·갤러리 등)에서 "공유 → 업무 사진"으로 보낸 사진을 받아요. (휴대폰에 앱을 설치한 경우)
+// 다른 앱(카카오톡·갤러리 등)에서 "공유 → 바로샷"으로 보낸 사진을 받아요. (휴대폰에 앱을 설치한 경우)
 async function receiveSharedPhotos() {
   if (!new URLSearchParams(location.search).has('shared')) return;
   history.replaceState(null, '', location.pathname);
@@ -1329,6 +1329,6 @@ $('install-app').addEventListener('click', async () => {
   installPrompt.prompt();
   const { outcome } = await installPrompt.userChoice;
   installPrompt = null; $('install-app').hidden = true;
-  if (outcome === 'accepted') notice('설치하고 있어요. 홈 화면의 “업무 사진” 아이콘으로 열어 주세요.');
+  if (outcome === 'accepted') notice('설치하고 있어요. 홈 화면의 “바로샷” 아이콘으로 열어 주세요.');
 });
 window.addEventListener('appinstalled', () => { $('install-app').hidden = true; });

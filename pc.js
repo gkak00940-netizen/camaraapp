@@ -1,6 +1,6 @@
 'use strict';
 
-// PC 받기: 휴대폰 업무 사진 앱에서 "회사 PC로 보내기"한 사진을 고른 폴더 안의 목적별 폴더에 저장해요.
+// PC 받기: 휴대폰 바로샷 앱에서 "회사 PC로 보내기"한 사진을 고른 폴더 안의 목적별 폴더에 저장해요.
 const $ = id => document.getElementById(id);
 const BOX_KEY = 'work-photos-pcbox-v1';
 const NAME_KEY = 'work-photos-pcname-v1';

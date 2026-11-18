@@ -1,7 +1,7 @@
 {
-  "name": "업무 사진",
-  "short_name": "업무 사진",
-  "description": "목적별로 업무 사진을 찍고 드라이브·카카오톡·이메일·문자로 보내는 앱",
+  "name": "바로샷",
+  "short_name": "바로샷",
+  "description": "찍고 바로 회사 PC·카카오톡·메시지로. 사진이 목적별 폴더로 정리돼 도착하는 업무 사진 앱",
   "lang": "ko",
   "id": "./",
   "start_url": "./",
@@ -14,11 +14,43 @@
     "action": "./share-target",
     "method": "POST",
     "enctype": "multipart/form-data",
-    "params": { "files": [ { "name": "photos", "accept": ["image/*", "video/*", ".jpg", ".jpeg", ".png", ".webp", ".mp4", ".webm", ".mov"] } ] }
+    "params": {
+      "files": [
+        {
+          "name": "photos",
+          "accept": [
+            "image/*",
+            "video/*",
+            ".jpg",
+            ".jpeg",
+            ".png",
+            ".webp",
+            ".mp4",
+            ".webm",
+            ".mov"
+          ]
+        }
+      ]
+    }
   },
   "icons": [
-    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
-    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
-    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+    {
+      "src": "icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
   ]
 }
