@@ -2,10 +2,10 @@
 
 // 앱 화면 파일을 휴대폰에 저장해 두어 인터넷이 약한 현장에서도 열리게 해요.
 // 앱 파일을 고치면 아래 버전 숫자를 올려 주세요. 그래야 휴대폰이 새 파일을 받아요.
-const CACHE = 'work-photo-app-v24';
+const CACHE = 'work-photo-app-v25';
 const SHARE_INBOX = 'work-photo-share';
 const FILES = ['./', 'index.html', 'style.css', 'app.js', 'config.js', 'relay.js', 'manifest.webmanifest',
-  'pc.html', 'pc.css', 'pc.js', 'manifest-pc.webmanifest', 'icons/icon-192.png', 'icons/icon-512.png'];
+  'pc.html', 'pc.css', 'pc.js', 'manifest-pc.webmanifest', 'privacy.html', 'icons/icon-192.png', 'icons/icon-512.png'];
 
 self.addEventListener('install', event => {
   event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(FILES)).then(() => self.skipWaiting()));
