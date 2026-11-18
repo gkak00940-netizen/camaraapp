@@ -44,5 +44,5 @@
 | `sw.js`, `manifest*.webmanifest`, `icons/` | 설치·오프라인·공유 받기·아이콘 |
 
 ## 고칠 때
-- `sw.js`의 `work-photo-app-v23` 숫자와 `index.html`·`pc.html`의 `?v=23`을 함께 1씩 올려야 설치된 휴대폰·PC가 새 화면을 받아요.
+- `sw.js`의 `work-photo-app-v24` 숫자와 `index.html`·`pc.html`의 `?v=24`을 함께 1씩 올려야 설치된 휴대폰·PC가 새 화면을 받아요.
 - 사진은 휴대폰 크롬 안(이 앱 보관함)에만 있어요. 크롬 데이터를 지우면 사라지니 중요한 사진은 바로 보내 두세요.

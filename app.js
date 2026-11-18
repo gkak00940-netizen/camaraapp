@@ -466,6 +466,8 @@ function stopCamera() {
   $('camera').srcObject = null;
   if ($('camera-screen').hidden) { controls(); return; }
   $('camera-screen').hidden = true; document.body.style.overflow = '';
+  // 카메라를 닫으면, 아직 저장 중인 사진까지 다 끝난 뒤 보관함을 한 번 새로 그려요.
+  if (albumDirty) { albumDirty = false; saveQueue.then(() => render()); }
   if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
   // 휴대폰 뒤로 가기로 카메라를 닫을 수 있게 넣어 둔 기록을 정리해요.
   if (history.state?.camera) history.back();
@@ -497,28 +499,45 @@ async function startCamera() {
   } finally { pendingCamera = false; controls(); }
 }
 
-async function capture() {
-  if (!stream || busy || !$('camera').videoWidth || !current) return;
-  busy = true; controls();
+// 연달아 찍기: 누르는 순간 화면을 바로 담고, 저장은 뒤에서 차례로 해요. (저장 중에도 셔터가 잠기지 않아요)
+// 보관함 화면은 카메라를 닫을 때 한 번만 새로 그려요. (찍을 때마다 다시 그리면 느려져서 셔터를 놓쳐요)
+let saveQueue = Promise.resolve();
+let pendingShots = 0;
+let albumDirty = false;
+function refreshAlbumLater() { if (!$('camera-screen').hidden) albumDirty = true; else render(); }
+// 사진이 이 휴대폰 안에만 있으니, 공간이 부족해도 휴대폰이 앱 자료를 함부로 지우지 않게 부탁해요.
+function keepData() { navigator.storage?.persist?.().catch(() => {}); }
+
+function capture() {
+  if (!stream || !$('camera').videoWidth || !current) return;
+  const video = $('camera'); const maxEdge = 1920;
+  const ratio = Math.min(1, maxEdge / Math.max(video.videoWidth, video.videoHeight));
+  const canvas = document.createElement('canvas'); canvas.width = Math.round(video.videoWidth * ratio); canvas.height = Math.round(video.videoHeight * ratio);
+  canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
   $('flash').classList.add('on'); requestAnimationFrame(() => requestAnimationFrame(() => $('flash').classList.remove('on')));
+  const purposeId = current; const created = Date.now();
+  pendingShots++; shotsThisSession++; updateShotCount();
+  saveQueue = saveQueue.then(() => saveShot(canvas, purposeId, created)).finally(() => { pendingShots--; });
+}
+
+async function saveShot(canvas, purposeId, created) {
   try {
-    const video = $('camera'); const maxEdge = 1920;
-    const ratio = Math.min(1, maxEdge / Math.max(video.videoWidth, video.videoHeight));
-    const canvas = document.createElement('canvas'); canvas.width = Math.round(video.videoWidth * ratio); canvas.height = Math.round(video.videoHeight * ratio);
-    canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
     const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.85));
     if (!blob) throw new Error('사진을 만들지 못했어요.');
-    const photo = { id:crypto.randomUUID(), purpose:current, created:Date.now(), blob, width:canvas.width, height:canvas.height };
-    const purpose = { ...currentPurpose(), used:Date.now() };
+    const photo = { id:crypto.randomUUID(), purpose:purposeId, created, blob, width:canvas.width, height:canvas.height };
+    const purpose = { ...purposes.find(p => p.id === purposeId), used:Date.now() };
     await write(['photos', 'purposes'], t => { t.objectStore('photos').add(photo); t.objectStore('purposes').put(purpose); });
     photos.push(photo); purposes = purposes.map(p => p.id === purpose.id ? purpose : p);
-    shotsThisSession++; updateShotCount();
+    keepData();
     if (lastShotUrl) URL.revokeObjectURL(lastShotUrl);
     lastShotUrl = URL.createObjectURL(blob); $('last-shot').src = lastShotUrl; $('last-shot').hidden = false;
-    camToast('저장됨');
+    camToast(pendingShots > 1 ? `저장 중… ${pendingShots - 1}장 남음` : '저장됨');
     notice(`“${purpose.name}”에 저장했어요. (${sizeLabel(blob.size)})`);
-  } catch { camToast('사진을 저장하지 못했어요. 휴대폰 저장 공간을 확인해 주세요.', true); notice('사진을 저장하지 못했어요. 휴대폰 저장 공간을 확인하고 다시 찍어 주세요.', true); }
-  finally { busy = false; render(); }
+  } catch {
+    shotsThisSession = Math.max(0, shotsThisSession - 1); updateShotCount();
+    camToast('사진을 저장하지 못했어요. 휴대폰 저장 공간을 확인해 주세요.', true);
+    notice('사진을 저장하지 못했어요. 휴대폰 저장 공간을 확인하고 다시 찍어 주세요.', true);
+  } finally { refreshAlbumLater(); }
 }
 
 /* ---------- 동영상: 카메라 화면에서 "동영상"으로 바꾸고 빨간 버튼으로 녹화 시작/멈춤 ---------- */
@@ -641,13 +660,13 @@ async function saveVideo(chunks, type, seconds, purposeId) {
     const purpose = { ...purposes.find(p => p.id === purposeId), used:Date.now() };
     await write(['photos', 'purposes'], t => { t.objectStore('photos').add(item); t.objectStore('purposes').put(purpose); });
     photos.push(item); purposes = purposes.map(p => p.id === purpose.id ? purpose : p);
-    navigator.storage?.persist?.().catch(() => {}); // 휴대폰이 공간 부족할 때 앱 자료를 함부로 지우지 않게 부탁해요
+    keepData();
     videosThisSession++; updateShotCount();
     if (info.poster) { if (lastShotUrl) URL.revokeObjectURL(lastShotUrl); lastShotUrl = URL.createObjectURL(info.poster); $('last-shot').src = lastShotUrl; $('last-shot').hidden = false; }
     camToast(`영상 저장됨 · ${durLabel(item.duration)} · ${sizeLabel(blob.size)}`);
     notice(`“${purpose.name}”에 영상을 저장했어요. (${durLabel(item.duration)}, ${sizeLabel(blob.size)})`);
   } catch { camToast('영상을 저장하지 못했어요. 휴대폰 저장 공간을 확인해 주세요.', true); notice('영상을 저장하지 못했어요. 휴대폰 저장 공간을 확인해 주세요.', true); }
-  finally { render(); }
+  finally { refreshAlbumLater(); }
 }
 
 function shutter() {
@@ -946,6 +965,7 @@ $('confirm-import').addEventListener('click', async () => {
     const purpose = { ...purposes.find(p => p.id === purposeId), used:Date.now() };
     await write(['photos', 'purposes'], t => { added.forEach(photo => t.objectStore('photos').add(photo)); t.objectStore('purposes').put(purpose); });
     photos.push(...added); purposes = purposes.map(p => p.id === purpose.id ? purpose : p);
+    if (added.length) keepData();
     $('import-dialog').close();
     openFolders.add(purposeId); view = 'purpose'; savePrefs();
     notice(`“${purpose.name}”에 받은 ${countLabel(added)}을 넣었어요.${skipped ? ` (${skipped}장은 열 수 없는 형식이라 뺐어요)` : ''}`, !added.length);
@@ -1282,6 +1302,7 @@ async function initialize() {
     } catch { /* 설정이 없어도 괜찮아요. */ }
     if (!current && purposes.length) current = [...purposes].sort((a, b) => b.used - a.used)[0].id;
     if (current) openFolders.add(current);
+    if (photos.length) keepData();
     render();
     notice(current ? `“${currentPurpose().name}” 목적이에요. 화면을 누르면 카메라가 켜져요.` : '맨 위에 촬영 목적을 입력하고 저장해 주세요.');
     // 크롬이 아닌 곳(삼성 인터넷·카톡 안 등)에서 열었으면 맨 위에 늘 경고를 보여 줘요.
