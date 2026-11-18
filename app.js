@@ -1034,18 +1034,19 @@ async function saveToDevice() {
   try {
     const files = photoFiles(picked, { plainName:true });
     for (const [i, file] of files.entries()) {
-      shareStatus(`휴대폰에 저장하는 중… ${i + 1} / ${files.length}`);
+      shareStatus(`갤러리에 저장하는 중… ${i + 1} / ${files.length}`);
       const url = URL.createObjectURL(file); const link = document.createElement('a');
       link.href = url; link.download = file.name; document.body.append(link); link.click(); link.remove();
       setTimeout(() => URL.revokeObjectURL(url), 30000);
       await new Promise(resolve => setTimeout(resolve, 500));
     }
-    shareStatus(`${countLabel(picked)}을 휴대폰에 저장했어요. 갤러리의 ‘다운로드’ 앨범(또는 내 파일 › 다운로드)에서 볼 수 있어요.${files.length > 1 ? ' 처음에 크롬이 “여러 파일 다운로드”를 물으면 허용을 눌러 주세요.' : ''}`);
+    shareStatus(`${countLabel(picked)}을 갤러리에 저장했어요. 갤러리의 ‘다운로드’ 앨범(또는 내 파일 › 다운로드)에서 볼 수 있어요.${files.length > 1 ? ' 처음에 크롬이 “여러 파일 다운로드”를 물으면 허용을 눌러 주세요.' : ''}`);
   } finally { busy = false; controls(); }
 }
 
 document.querySelectorAll('.share').forEach(button => button.addEventListener('click', async () => {
   if (busy) return;
+  if (button.dataset.target === 'gallery') return; // 갤러리는 아래 saveToDevice가 맡아요
   const target = TARGETS[button.dataset.target];
   const picked = selectedPhotos();
   if (!picked.length) { shareStatus(photos.length ? '먼저 보낼 사진을 체크해 주세요. (사진 왼쪽 위 네모 칸, 또는 목적 폴더를 펼쳐 "이 목적 선택")' : '보낼 사진이 없어요. 먼저 사진을 찍어 주세요.', true); return; }
