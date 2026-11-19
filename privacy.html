@@ -2,6 +2,8 @@
 <html lang="ko">
 <head>
   <meta charset="utf-8">
+  <!-- 주소창이 http:// 이면 바로 https:// 로 옮겨요 (카메라·설치는 https에서만 돼요) -->
+  <script>if (location.protocol === 'http:' && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') location.replace('https:' + location.href.slice(5));</script>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>개인정보처리방침 · 바로샷</title>
   <style>

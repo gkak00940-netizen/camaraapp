@@ -2,17 +2,19 @@
 <html lang="ko">
 <head>
   <meta charset="utf-8">
+  <!-- 주소창이 http:// 이면 바로 https:// 로 옮겨요 (카메라·설치는 https에서만 돼요) -->
+  <script>if (location.protocol === 'http:' && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') location.replace('https:' + location.href.slice(5));</script>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#1d3557">
   <title>바로샷 PC 받기</title>
   <link rel="manifest" href="manifest-pc.webmanifest">
   <link rel="icon" href="icons/icon-192.png">
-  <link rel="stylesheet" href="style.css?v=32">
-  <link rel="stylesheet" href="pc.css?v=32">
+  <link rel="stylesheet" href="style.css?v=33">
+  <link rel="stylesheet" href="pc.css?v=33">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js" defer></script>
-  <script src="config.js?v=32" defer></script>
-  <script src="relay.js?v=32" defer></script>
-  <script src="pc.js?v=32" defer></script>
+  <script src="config.js?v=33" defer></script>
+  <script src="relay.js?v=33" defer></script>
+  <script src="pc.js?v=33" defer></script>
 </head>
 <body class="pc">
   <header class="top">
