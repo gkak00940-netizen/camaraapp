@@ -486,7 +486,7 @@ function stopCamera() {
   audioStream?.getTracks().forEach(track => track.stop()); audioStream = null;
   stream?.getTracks().forEach(track => track.stop()); stream = null;
   $('camera').srcObject = null;
-  resetCameraControls();
+  resetCameraControls(); $('quality-note').hidden = true;
   if ($('camera-screen').hidden) { controls(); return; }
   $('camera-screen').hidden = true; document.body.style.overflow = '';
   // 카메라를 닫으면, 아직 저장 중인 사진까지 다 끝난 뒤 보관함을 한 번 새로 그려요.
@@ -517,6 +517,7 @@ async function startCamera() {
     stream = opened; $('camera').srcObject = stream;
     await $('camera').play();
     setupCameraControls();
+    showQualityNote();
     if (camMode === 'video') applyModeConstraints();
   } catch (error) {
     stopCamera();
@@ -604,6 +605,19 @@ function applyModeConstraints() {
   track.applyConstraints(wanted).catch(() => { /* 안 되면 지금 화질 그대로 찍어요 */ });
   renderZoom();
 }
+
+/* ---------- 화질 안내: 카메라를 처음 열 때 한 번만 ---------- */
+const QUALITY_KEY = 'work-photos-quality-seen-v1';
+function showQualityNote() {
+  let seen = false;
+  try { seen = localStorage.getItem(QUALITY_KEY) === '1'; } catch { /* 저장이 막혀 있으면 매번 보여도 괜찮아요 */ }
+  $('quality-note').hidden = seen;
+}
+$('quality-ok').addEventListener('click', event => {
+  event.stopPropagation();
+  try { localStorage.setItem(QUALITY_KEY, '1'); } catch { /* 무시 */ }
+  $('quality-note').hidden = true;
+});
 
 /* ---------- 확대·축소와 플래시 ---------- */
 // 휴대폰 카메라가 확대를 지원하면(hwZoom) 카메라 자체로 확대해요 → 사진·동영상 모두 돼요.

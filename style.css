@@ -312,3 +312,14 @@ dialog h2 { font-size:21px; }
 .zoom-chip { min-width:44px; min-height:44px; padding:0 8px; border:0; border-radius:999px; background:transparent; color:white; font-size:14px; font-weight:800; }
 .zoom-chip[aria-pressed="true"] { background:#ffffff26; color:#ffd23f; font-size:15px; }
 .camera-screen video { touch-action:none; transform-origin:center; }
+
+/* 화질 안내 (카메라 처음 열 때) */
+.quality-note { position:absolute; left:14px; right:14px; top:calc(76px + env(safe-area-inset-top)); z-index:3; max-width:420px; margin:0 auto; padding:14px 16px; border-radius:14px; background:#fffffff2; color:#1b2430; font-size:15px; line-height:1.55; }
+.quality-note p { margin:0 0 6px; }
+.quality-note b { color:#1d3557; }
+.quality-note .quality-title { font-weight:800; font-size:16px; }
+.quality-note .quality-sub { color:#5d6878; font-size:14px; }
+.quality-note .quality-actions { display:flex; justify-content:flex-end; margin-top:8px; }
+.quality-note .quality-actions button { min-height:44px; padding:0 20px; }
+/* 가져오기 창의 화질 안내 */
+.import-quality { margin:10px 0 0; padding:8px 12px; border-radius:10px; background:#fff7e6; color:#7a4b00; font-size:14px; line-height:1.5; }
