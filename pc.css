@@ -38,3 +38,4 @@
 .folder-hide { color:var(--danger) !important; }
 /* 7일 안내 */
 .keep-note { margin:14px 0 0; padding:10px 14px; border-radius:10px; background:#fff7e6; color:#7a4b00; font-size:14px; line-height:1.6; }
+.regrant-row { margin:8px 0 0; text-align:center; } .regrant-row button { min-height:48px; padding:0 22px; font-size:16px; }

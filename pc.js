@@ -9,6 +9,8 @@ const LOG_KEY = 'work-photos-pclog-v1';
 let root = null;        // 저장할 폴더
 let listener = null;    // 중계 저장소 지켜보기
 let received = 0;
+let savedFolderName = ''; // 지난번에 고른 폴더 이름 (허락이 풀렸을 때 안내용)
+let saveChain = Promise.resolve(); // 사진을 한 장씩 차례로 저장해요 (동시에 저장하면 같은 이름끼리 덮어써요)
 
 function status(text, kind = '') { $('pc-status').textContent = text; $('pc-status').className = `pc-status ${kind}`; }
 const safeName = text => String(text || '').replace(/[\\/:*?"<>|\u0000-\u001f]/g, '_').replace(/[. ]+$/, '').trim() || '목적 없음';
@@ -75,17 +77,24 @@ $('pick-folder').addEventListener('click', async () => {
   try { await setFolder(await showDirectoryPicker({ id:'work-photos', mode:'readwrite', startIn:'desktop' })); }
   catch (error) { if (error.name !== 'AbortError') status('폴더를 고르지 못했어요. 다시 눌러 주세요.', 'error'); }
 });
-$('regrant-folder').addEventListener('click', async () => {
+async function regrant() {
   const handle = await kv('dir');
   if (handle && await handle.requestPermission({ mode:'readwrite' }) === 'granted') setFolder(handle);
-});
+}
+$('regrant-folder').addEventListener('click', regrant);
+$('album-regrant').addEventListener('click', regrant);
 
 async function restoreFolder() {
   const handle = await kv('dir').catch(() => null);
   if (!handle) return;
-  $('folder-name').textContent = `📁 ${handle.name}`;
+  $('folder-name').textContent = `📁 ${handle.name}`; savedFolderName = handle.name;
   if (await handle.queryPermission({ mode:'readwrite' }) === 'granted') setFolder(handle);
-  else { $('regrant-folder').hidden = false; status('저장 폴더 사용을 다시 허락해 주세요. “폴더 다시 연결”을 누르면 돼요.', 'error'); }
+  else {
+    // 크롬은 창을 닫으면 폴더 허락을 잊을 수 있어요. 그러면 받은 사진 목록도 못 읽어서 비어 보여요.
+    $('regrant-folder').hidden = false; $('album-regrant').hidden = false;
+    status('저장 폴더 사용을 다시 허락해 주세요. “폴더 다시 연결” → “방문할 때마다 허용”을 누르면 다음부터는 묻지 않아요.', 'error');
+    renderAlbum();
+  }
 }
 
 // 같은 이름 파일이 있으면: 크기까지 같으면 이미 받은 사진으로 보고 넘어가고(isNew:false), 다르면 (2), (3)을 붙여요.
@@ -183,7 +192,14 @@ $('viewer').addEventListener('close', () => { $('viewer-video').pause(); $('view
 
 async function renderAlbum() {
   galleryUrls.forEach(url => URL.revokeObjectURL(url)); galleryUrls = [];
-  if (!root) { $('album').replaceChildren(); $('album-empty').hidden = false; $('album-empty').textContent = '저장할 폴더를 고르면 받은 사진이 목적별로 보여요.'; $('recv-count').textContent = ''; return; }
+  if (!root) {
+    $('album').replaceChildren(); $('album-empty').hidden = false; $('recv-count').textContent = '';
+    $('album-empty').textContent = savedFolderName
+      ? `받은 사진은 “${savedFolderName}” 폴더에 그대로 있어요. 크롬이 폴더 사용 허락을 잊어서 지금은 목록을 못 읽어요. 아래 “폴더 다시 연결”을 누르고 “방문할 때마다 허용”을 골라 주세요.`
+      : '저장할 폴더를 고르면 받은 사진이 목적별로 보여요.';
+    return;
+  }
+  $('album-regrant').hidden = true;
   let folders;
   try { folders = await readAlbum(); }
   catch { $('album-empty').hidden = false; $('album-empty').textContent = '저장 폴더를 읽지 못했어요. “폴더 다시 연결”을 눌러 주세요.'; return; }
@@ -277,7 +293,10 @@ async function startListening() {
     listener = await Relay.listen(box(), async photo => {
       if (!root) return false; // 폴더를 고르면 다시 저장해요
       try {
-        const { name, isNew } = await saveFile(photo.purpose, photo.name, photo.blob);
+        // 같은 시각에 찍힌(가져온) 사진은 이름이 같아요. 동시에 저장하면 서로 덮어써서 한 장만 남으니, 한 장씩 차례로 저장해요.
+        const job = saveChain.then(() => saveFile(photo.purpose, photo.name, photo.blob));
+        saveChain = job.catch(() => {});
+        const { name, isNew } = await job;
         if (isNew) {
           received++; openFolders.add(safeName(photo.purpose));
           status(`저장했어요 (이번에 ${received}개): ${safeName(photo.purpose)} / ${name}`, 'ok');
