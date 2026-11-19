@@ -3,8 +3,8 @@
 목적별로 업무 사진·동영상을 찍고, **회사 PC(목적별 폴더)**·갤러리·카카오톡·메시지·이메일·다른 앱으로 보내는 휴대폰용 웹앱이에요.
 회사 PC에는 **PC 받기** 화면을 설치해 두면, 보낸 사진이 PC 폴더 안에 목적 이름 폴더로 저장돼요.
 
-- 휴대폰 앱: https://gkak00940-netizen.github.io/camaraapp/
-- PC 받기: https://gkak00940-netizen.github.io/camaraapp/pc.html
+- 휴대폰 앱: https://baroshot.kr/
+- PC 받기: https://baroshot.kr/pc.html
 
 ## 처음 한 번
 1. **휴대폰**: 꼭 **크롬**에서 앱 주소를 열고 **앱 설치**. (삼성 인터넷·카톡 안에서 열면 맨 위에 "크롬으로 열어 주세요" 경고가 나와요)

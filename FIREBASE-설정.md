@@ -23,5 +23,5 @@ PC가 저장하면 바로 지워져서 무료 범위 안에서 써요. (Spark �
 ## 5. 끝
 Claude가 `config.js`에 설정값을 넣어 다시 올리면,
 - 휴대폰: 사진을 고르면 보내기 칸에 **회사 PC로 보내기** 버튼이 생겨요.
-- 회사 PC: 크롬에서 `https://gkak00940-netizen.github.io/camaraapp/pc.html` 을 열고
+- 회사 PC: 크롬에서 `https://baroshot.kr/pc.html` 을 열고
   ① 저장할 폴더 고르기 ② 휴대폰 카메라로 QR 찍기 → 끝. 주소창 오른쪽의 설치 아이콘으로 PC에 앱처럼 설치해 두면 편해요.
