@@ -1128,7 +1128,7 @@ function pickedSummary(picked) {
 $('open-chrome').addEventListener('click', openInChrome);
 $('browser-chrome').addEventListener('click', openInChrome);
 
-// 공유가 안 될 때: 사진을 휴대폰에 저장해서 갤러리에서 보내게 해요. (갤러리가 잘 알아보는 단순한 영문 이름으로)
+// 공유가 안 될 때: 사진을 휴대폰에 저장해서 갤러리에서 보내게 해요. (이름 앞에 목적 이름)
 $('save-photos').addEventListener('click', async () => {
   saveToDevice();
 });
@@ -1139,7 +1139,9 @@ async function saveToDevice() {
   const picked = selectedPhotos(); if (!picked.length) { shareStatus('먼저 저장할 사진을 체크해 주세요.', true); return; }
   busy = true; controls();
   try {
-    const files = photoFiles(picked, { plainName:true });
+    // 파일 이름 앞에 목적 이름을 붙여요 (예: 보험청구_20261119_101500_1.jpg).
+    // 보험 신청서 등에서 사진을 고를 때 이름으로 바로 찾을 수 있어요.
+    const files = photoFiles(picked);
     for (const [i, file] of files.entries()) {
       shareStatus(`갤러리에 저장하는 중… ${i + 1} / ${files.length}`);
       const url = URL.createObjectURL(file); const link = document.createElement('a');
@@ -1148,7 +1150,7 @@ async function saveToDevice() {
       await new Promise(resolve => setTimeout(resolve, 500));
     }
     await markSent(picked, '갤러리');
-    shareStatus(`${countLabel(picked)}을 갤러리에 저장했어요. 갤러리의 ‘다운로드’ 앨범(또는 내 파일 › 다운로드)에서 볼 수 있어요.${files.length > 1 ? ' 처음에 크롬이 “여러 파일 다운로드”를 물으면 허용을 눌러 주세요.' : ''}`);
+    shareStatus(`${countLabel(picked)}을 갤러리에 저장했어요. 갤러리의 ‘다운로드’ 앨범(또는 내 파일 › 다운로드)에서 볼 수 있어요. ${new Set(picked.map(purposeName)).size === 1 ? `파일 이름이 “${safeName(purposeName(picked[0]))}_…”로 시작해요.` : '파일 이름이 각 목적 이름으로 시작해요.'}${files.length > 1 ? ' 처음에 크롬이 “여러 파일 다운로드”를 물으면 허용을 눌러 주세요.' : ''}`);
   } finally { busy = false; controls(); }
 }
 
