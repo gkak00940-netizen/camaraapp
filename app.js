@@ -486,6 +486,7 @@ function stopCamera() {
   audioStream?.getTracks().forEach(track => track.stop()); audioStream = null;
   stream?.getTracks().forEach(track => track.stop()); stream = null;
   $('camera').srcObject = null;
+  resetCameraControls();
   if ($('camera-screen').hidden) { controls(); return; }
   $('camera-screen').hidden = true; document.body.style.overflow = '';
   // 카메라를 닫으면, 아직 저장 중인 사진까지 다 끝난 뒤 보관함을 한 번 새로 그려요.
@@ -510,10 +511,12 @@ async function startCamera() {
   const requestId = ++cameraRequest;
   pendingCamera = true; controls();
   try {
-    const opened = await navigator.mediaDevices.getUserMedia({ audio:false, video:{ facingMode:{ ideal:'environment' }, width:{ ideal:2560 }, height:{ ideal:1920 } } });
+    // zoom:true → 휴대폰 카메라가 확대·축소를 지원하면 쓸 수 있게 요청해요. (지원하지 않으면 그냥 무시돼요)
+    const opened = await navigator.mediaDevices.getUserMedia({ audio:false, video:{ facingMode:{ ideal:'environment' }, width:{ ideal:2560 }, height:{ ideal:1920 }, zoom:true } });
     if (requestId !== cameraRequest || document.hidden) { opened.getTracks().forEach(track => track.stop()); return; }
     stream = opened; $('camera').srcObject = stream;
     await $('camera').play();
+    setupCameraControls();
     if (camMode === 'video') applyModeConstraints();
   } catch (error) {
     stopCamera();
@@ -533,9 +536,13 @@ function keepData() { navigator.storage?.persist?.().catch(() => {}); }
 function capture() {
   if (!stream || !$('camera').videoWidth || !current) return;
   const video = $('camera'); const maxEdge = 1920;
-  const ratio = Math.min(1, maxEdge / Math.max(video.videoWidth, video.videoHeight));
-  const canvas = document.createElement('canvas'); canvas.width = Math.round(video.videoWidth * ratio); canvas.height = Math.round(video.videoHeight * ratio);
-  canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
+  // 카메라가 확대를 지원하지 않는 휴대폰은 화면 가운데를 잘라 확대해요(디지털 확대).
+  const crop = hwZoom ? 1 : zoomLevel;
+  const sw = video.videoWidth / crop, sh = video.videoHeight / crop;
+  const sx = (video.videoWidth - sw) / 2, sy = (video.videoHeight - sh) / 2;
+  const ratio = Math.min(1, maxEdge / Math.max(sw, sh));
+  const canvas = document.createElement('canvas'); canvas.width = Math.round(sw * ratio); canvas.height = Math.round(sh * ratio);
+  canvas.getContext('2d').drawImage(video, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
   $('flash').classList.add('on'); requestAnimationFrame(() => requestAnimationFrame(() => $('flash').classList.remove('on')));
   const purposeId = current; const created = Date.now();
   pendingShots++; shotsThisSession++; updateShotCount();
@@ -592,8 +599,99 @@ function applyModeConstraints() {
   const wanted = camMode === 'video'
     ? { facingMode:{ ideal:'environment' }, width:{ ideal:1280 }, height:{ ideal:720 }, frameRate:{ ideal:30 } }
     : { facingMode:{ ideal:'environment' }, width:{ ideal:2560 }, height:{ ideal:1920 } };
+  const keep = {}; if (hwZoom) keep.zoom = zoomLevel; if (hasTorch) keep.torch = torchOn;
+  if (Object.keys(keep).length) wanted.advanced = [keep]; // 화질을 바꿔도 확대·플래시는 그대로
   track.applyConstraints(wanted).catch(() => { /* 안 되면 지금 화질 그대로 찍어요 */ });
+  renderZoom();
 }
+
+/* ---------- 확대·축소와 플래시 ---------- */
+// 휴대폰 카메라가 확대를 지원하면(hwZoom) 카메라 자체로 확대해요 → 사진·동영상 모두 돼요.
+// 지원하지 않으면 사진만 화면 가운데를 잘라서 확대해요(디지털, 최대 4배). 이때 동영상은 확대 없이 찍어요.
+let hwZoom = null; let zoomLevel = 1; let hasTorch = false; let torchOn = false;
+let zoomBusy = false; let zoomNext = null; let zoomHintShown = false;
+const DIGITAL_MAX = 4;
+function zoomRange() {
+  if (hwZoom) return { min:Math.max(1, hwZoom.min || 1), max:Math.min(hwZoom.max || 1, 10) };
+  return { min:1, max:camMode === 'photo' ? DIGITAL_MAX : 1 };
+}
+function setupCameraControls() {
+  const track = stream?.getVideoTracks()[0];
+  const caps = track?.getCapabilities?.() || {};
+  hwZoom = caps.zoom && caps.zoom.max > 1 ? caps.zoom : null;
+  hasTorch = !!caps.torch;
+  zoomLevel = 1; torchOn = false;
+  if (hwZoom) setZoom(Math.max(1, hwZoom.min || 1));
+  $('cam-torch').hidden = !hasTorch; renderTorch(); renderZoom();
+  if (!$('cam-zoom').hidden && !zoomHintShown) { zoomHintShown = true; camToast('두 손가락으로 벌리면 확대돼요'); }
+}
+function resetCameraControls() {
+  hwZoom = null; hasTorch = false; torchOn = false; zoomLevel = 1; zoomBusy = false; zoomNext = null; pinch = null;
+  $('camera').style.transform = ''; $('cam-torch').hidden = true; $('cam-zoom').hidden = true;
+}
+function setZoom(value) {
+  const { min, max } = zoomRange();
+  zoomLevel = Math.min(max, Math.max(min, Math.round(value * 10) / 10));
+  if (hwZoom) {
+    // 손가락을 움직이는 동안 너무 자주 바꾸지 않게, 하나가 끝나면 마지막 값만 적용해요.
+    if (zoomBusy) zoomNext = zoomLevel; else applyHwZoom(zoomLevel);
+    $('camera').style.transform = '';
+  } else $('camera').style.transform = zoomLevel > 1 ? `scale(${zoomLevel})` : '';
+  renderZoom();
+}
+async function applyHwZoom(value) {
+  const track = stream?.getVideoTracks()[0]; if (!track) return;
+  zoomBusy = true;
+  try { await track.applyConstraints({ advanced:[{ zoom:value }] }); } catch { /* 이 배율이 안 되면 그대로 */ }
+  zoomBusy = false;
+  if (zoomNext != null) { const next = zoomNext; zoomNext = null; applyHwZoom(next); }
+}
+const zoomText = v => `${Number.isInteger(v) ? v : v.toFixed(1)}x`;
+function renderZoom() {
+  const { min, max } = zoomRange();
+  const box = $('cam-zoom');
+  if (!stream || max <= min) {
+    box.hidden = true;
+    if (!hwZoom && zoomLevel !== 1) { zoomLevel = 1; $('camera').style.transform = ''; }
+    return;
+  }
+  box.hidden = false;
+  const presets = [1, 2, 3, 5, 10].filter(v => v >= min && v <= max);
+  // 지금 배율이 버튼 사이 값이면(예: 2.4배) 가장 가까운 버튼 자리에 그 값을 보여 줘요.
+  const near = presets.reduce((a, b) => Math.abs(b - zoomLevel) < Math.abs(a - zoomLevel) ? b : a, presets[0]);
+  box.replaceChildren(...presets.map(v => {
+    const b = document.createElement('button'); b.type = 'button'; b.className = 'zoom-chip';
+    const active = v === near; b.setAttribute('aria-pressed', String(active));
+    b.textContent = active ? zoomText(zoomLevel) : zoomText(v);
+    b.setAttribute('aria-label', `${v}배로`);
+    b.addEventListener('click', event => { event.stopPropagation(); setZoom(v); });
+    return b;
+  }));
+}
+// 두 손가락으로 벌리고 오므리기
+let pinch = null; let pinchedAt = 0;
+const touchGap = t => Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY);
+$('camera-screen').addEventListener('touchstart', event => {
+  if (event.touches.length === 2 && !$('cam-zoom').hidden) { pinch = { gap:touchGap(event.touches), zoom:zoomLevel }; event.preventDefault(); }
+}, { passive:false });
+$('camera-screen').addEventListener('touchmove', event => {
+  if (!pinch || event.touches.length !== 2) return;
+  event.preventDefault();
+  setZoom(pinch.zoom * touchGap(event.touches) / pinch.gap);
+}, { passive:false });
+$('camera-screen').addEventListener('touchend', event => { if (pinch && event.touches.length < 2) { pinch = null; pinchedAt = Date.now(); } });
+
+function renderTorch() {
+  $('cam-torch').setAttribute('aria-pressed', String(torchOn));
+  $('cam-torch').setAttribute('aria-label', torchOn ? '플래시 끄기' : '플래시 켜기');
+  $('cam-torch').classList.toggle('on', torchOn);
+}
+$('cam-torch').addEventListener('click', async () => {
+  const track = stream?.getVideoTracks()[0]; if (!track || !hasTorch) return;
+  const want = !torchOn;
+  try { await track.applyConstraints({ advanced:[{ torch:want }] }); torchOn = want; renderTorch(); camToast(want ? '플래시 켜짐' : '플래시 꺼짐'); }
+  catch { camToast('플래시를 켜지 못했어요.', true); }
+});
 
 function setMode(mode, apply = true) {
   if (recorder) return;
@@ -699,7 +797,7 @@ function shutter() {
 $('viewfinder').addEventListener('click', startCamera);
 $('capture').addEventListener('click', shutter);
 // 화면 터치로 찍기는 사진일 때만. (녹화 중 실수로 멈추지 않게)
-$('camera').addEventListener('click', () => { if (camMode === 'photo') capture(); });
+$('camera').addEventListener('click', () => { if (camMode === 'photo' && Date.now() - pinchedAt > 400) capture(); });
 $('camera').addEventListener('loadeddata', controls);
 $('stop-camera').addEventListener('click', () => {
   stopCamera();

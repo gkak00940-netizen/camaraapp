@@ -10,10 +10,10 @@
   <link rel="apple-touch-icon" href="icons/icon-192.png">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="바로샷">
-  <link rel="stylesheet" href="style.css?v=29">
-  <script src="config.js?v=29" defer></script>
-  <script src="relay.js?v=29" defer></script>
-  <script src="app.js?v=29" defer></script>
+  <link rel="stylesheet" href="style.css?v=30">
+  <script src="config.js?v=30" defer></script>
+  <script src="relay.js?v=30" defer></script>
+  <script src="app.js?v=30" defer></script>
 </head>
 <body>
   <!-- 크롬이 아닌 브라우저(삼성 인터넷 등)에서 열면 맨 위에 나와요 -->
@@ -107,10 +107,12 @@
   <div id="camera-screen" class="camera-screen" hidden role="dialog" aria-label="카메라">
     <video id="camera" autoplay playsinline muted></video>
     <span id="flash" class="flash" aria-hidden="true"></span>
-    <div class="cam-top"><span id="cam-purpose" class="cam-purpose"></span><button type="button" id="stop-camera" class="cam-close" aria-label="카메라 닫기">✕</button></div>
+    <div class="cam-top"><span id="cam-purpose" class="cam-purpose"></span><span class="cam-top-btns"><button type="button" id="cam-torch" class="cam-close cam-torch" aria-label="플래시 켜기" aria-pressed="false" hidden>⚡</button><button type="button" id="stop-camera" class="cam-close" aria-label="카메라 닫기">✕</button></span></div>
     <p id="cam-toast" class="cam-toast" role="status" hidden></p>
     <p id="rec-timer" class="rec-timer" hidden><span class="rec-dot" aria-hidden="true"></span><span id="rec-time">00:00</span><small id="rec-size"></small></p>
     <div class="cam-bottom">
+      <!-- 확대·축소: 두 손가락으로 벌리고 오므리거나, 배율 버튼을 눌러요 -->
+      <div id="cam-zoom" class="cam-zoom" role="group" aria-label="확대·축소" hidden></div>
       <div class="cam-modes" role="radiogroup" aria-label="촬영 종류">
         <button type="button" class="cam-mode" data-mode="photo" role="radio" aria-checked="true">사진</button>
         <button type="button" class="cam-mode" data-mode="video" role="radio" aria-checked="false">동영상</button>

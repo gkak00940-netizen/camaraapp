@@ -304,3 +304,11 @@ dialog h2 { font-size:21px; }
 .pair-keep .tag-wait, .pair-keep .tag-ok { padding:0 5px; border-radius:5px; color:white; font-size:12px; }
 .pair-keep .tag-wait { background:#d97706; }
 .pair-keep .tag-ok { background:#2e7d32; }
+
+/* 확대·축소 버튼과 플래시 */
+.cam-top-btns { display:flex; gap:10px; flex:none; }
+.cam-torch.on { background:#ffd23f; color:#1b2430; }
+.cam-zoom { grid-column:1 / -1; justify-self:center; display:flex; gap:6px; padding:4px; border-radius:999px; background:#0008; }
+.zoom-chip { min-width:44px; min-height:44px; padding:0 8px; border:0; border-radius:999px; background:transparent; color:white; font-size:14px; font-weight:800; }
+.zoom-chip[aria-pressed="true"] { background:#ffffff26; color:#ffd23f; font-size:15px; }
+.camera-screen video { touch-action:none; transform-origin:center; }
