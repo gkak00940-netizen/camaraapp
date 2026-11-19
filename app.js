@@ -1176,9 +1176,11 @@ $('toggle-send').addEventListener('click', () => setBarOpen($('bar-more').hidden
 /* ---------- 보내기: 휴대폰 공유 화면을 열고, 고를 앱을 위에 크게 알려 줘요 ---------- */
 let hintTimer = 0;
 function showHint(text) {
-  clearTimeout(hintTimer); $('share-hint').textContent = text; $('share-hint').hidden = false;
+  clearTimeout(hintTimer); $('share-hint-text').textContent = text; $('share-hint').hidden = false;
   hintTimer = setTimeout(() => { $('share-hint').hidden = true; }, 6000);
 }
+// 기다리지 않고 바로 닫을 수 있어요: ✕ 버튼 또는 안내를 아무 데나 눌러요.
+$('share-hint').addEventListener('click', () => { clearTimeout(hintTimer); $('share-hint').hidden = true; });
 
 // 보내기 결과는 버튼 바로 밑에 보여 줘요. (위쪽 안내 칸은 화면 밖이라 안 보여요)
 function shareStatus(text, error = false) {

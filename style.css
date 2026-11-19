@@ -323,3 +323,9 @@ dialog h2 { font-size:21px; }
 .quality-note .quality-actions button { min-height:44px; padding:0 20px; }
 /* 가져오기 창의 화질 안내 */
 .import-quality { margin:10px 0 0; padding:8px 12px; border-radius:10px; background:#fff7e6; color:#7a4b00; font-size:14px; line-height:1.5; }
+
+/* 위쪽 안내 닫기 */
+.share-hint { display:flex; align-items:center; gap:10px; padding-right:8px; cursor:pointer; }
+.share-hint[hidden] { display:none; }
+.share-hint > span { flex:1; }
+.share-hint-close { flex:none; width:44px; min-height:44px; padding:0; border:0; border-radius:50%; background:#ffffff26; color:white; font-size:18px; }
