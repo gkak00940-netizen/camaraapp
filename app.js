@@ -8,6 +8,7 @@ const MAX_SMS = 10;
 // 내보내기 용량 기준 (보내는 곳마다 한도가 달라요)
 const SMS_LIMIT = 1 * 1024 * 1024;     // 문자(MMS): 통신사 기준 대략 1MB 안팎 → 사진 몇 장만, 영상은 불가
 const EMAIL_LIMIT = 25 * 1024 * 1024;  // 메일 첨부: Gmail 기준 25MB (넘으면 드라이브 링크로 바뀜)
+const BIG_VIDEO = 50 * 1024 * 1024;   // 영상 합계가 50MB를 넘으면 PC 받기를 켜 두고 보내기를 권해요
 const BIG_SEND = 100 * 1024 * 1024;    // 한 번에 100MB가 넘으면 와이파이에서 보내기를 권해요
 const $ = id => document.getElementById(id);
 
@@ -104,6 +105,7 @@ function sizeAdvice(list) {
   else if (hasVideo) text += '문자로는 영상을 못 보내요. 나머지는 모두 괜찮아요.';
   else if (total > SMS_LIMIT) text += '문자는 화질이 줄 수 있어요. 나머지는 모두 괜찮아요.';
   else text += '어디로든 보낼 수 있어요.';
+  if (hasVideo && total > BIG_VIDEO) text += ' 긴 영상은 와이파이에서, 회사 PC의 PC 받기를 켜 둔 상태로 보내면 가장 빨리 받아져요.';
   note.textContent = text; note.className = warn ? 'size-note warn' : 'size-note';
 }
 
@@ -165,7 +167,7 @@ function controls() {
   if (!count || wasHidden) { $('share-status').hidden = true; $('share-fallback').hidden = true; setBarOpen(false); }
   const pickedNow = selectedPhotos();
   $('selection-count').textContent = `${countLabel(pickedNow)} 선택`;
-  $('selection-size').textContent = count ? `합계 ${sizeLabel(totalSize(pickedNow))}` : '';
+  $('selection-size').textContent = count ? `합계 ${sizeLabel(totalSize(pickedNow))} · 최대 ${MAX_SHARE}개` : '';
   sizeAdvice(pickedNow);
   document.querySelectorAll('.share').forEach(button => { button.disabled = busy; });
   $('save-photos').disabled = busy || !count;
@@ -472,10 +474,10 @@ function askDeletePurpose(purpose) {
 
 /* ---------- 카메라: 폰 화면 전체로 열고, 화면이나 둥근 버튼을 누르면 찍혀요 ---------- */
 let toastTimer = 0;
-function camToast(text, error = false) {
+function camToast(text, error = false, ms = 0) {
   clearTimeout(toastTimer);
   $('cam-toast').textContent = text; $('cam-toast').className = error ? 'cam-toast error' : 'cam-toast'; $('cam-toast').hidden = false;
-  toastTimer = setTimeout(() => { $('cam-toast').hidden = true; }, error ? 4000 : 1200);
+  toastTimer = setTimeout(() => { $('cam-toast').hidden = true; }, ms || (error ? 4000 : 1200));
 }
 
 let lastShotUrl = '';
@@ -738,10 +740,12 @@ async function startRecording() {
   recStarted = Date.now();
   $('camera-screen').classList.add('recording'); $('rec-timer').hidden = false; $('rec-size').textContent = '';
   $('capture').setAttribute('aria-label', '녹화 멈추기');
+  let warned = false;
   const tick = () => {
     const sec = (Date.now() - recStarted) / 1000;
     $('rec-time').textContent = `${pad(Math.floor(sec / 60))}:${pad(Math.floor(sec % 60))}`;
-    if (sec >= MAX_RECORD_SEC) { stopRecording(); camToast('5분이 넘어 녹화를 멈추고 저장했어요. 이어서 찍으려면 다시 누르세요.'); }
+    if (!warned && sec >= MAX_RECORD_SEC - 30) { warned = true; camToast('30초 남았어요. 5분이 되면 저절로 멈추고 저장돼요.', false, 4000); }
+    if (sec >= MAX_RECORD_SEC) { stopRecording(); camToast('5분이 되어 녹화를 멈추고 저장했어요. 이어서 찍으려면 다시 누르세요.', false, 5000); }
   };
   tick(); recTimer = setInterval(tick, 500);
 }
@@ -862,7 +866,7 @@ function renderPcButton() {
   $('send-pc-label').textContent = link ? link.name : '회사 PC';
   $('pc-card').classList.toggle('linked', !!link);
   $('pc-card-title').textContent = link ? `✓ ${link.name}와 연결됨` : '회사 PC 연결 안 됨';
-  $('pc-card-sub').textContent = link ? `${new Date(link.at).toLocaleDateString('ko-KR')}에 연결 · 다시 하려면 “바꾸기”` : 'PC 받기 화면의 QR을 이 앱으로 찍어 연결해요';
+  $('pc-card-sub').textContent = link ? `${new Date(link.at).toLocaleDateString('ko-KR')}에 연결 · 다시 하려면 “바꾸기”` : `PC에서 ${PC_URL.replace(/^https?:\/\//, '')} 열고 QR 찍기`;
   $('pc-card-btn').textContent = link ? '바꾸기' : '연결하기';
   $('pc-card-btn').className = link ? 'small' : 'accent small';
 }
@@ -907,7 +911,7 @@ function stopPairScan() {
 
 async function openPairing() {
   const link = pcLink();
-  $('pair-unlink').hidden = !link;
+  $('pair-unlink').hidden = !link; $('pair-noqr').hidden = !!link;
   $('pair-input').value = ''; $('pair-scan').hidden = false;
   $('pair-status').textContent = link ? `지금은 “${link.name}”와 연결돼 있어요. 다른 PC와 연결하려면 그 PC의 QR을 비춰 주세요.` : '카메라를 켜고 있어요…';
   $('pair-dialog').showModal();
@@ -937,6 +941,33 @@ async function openPairing() {
 }
 
 $('pc-card-btn').addEventListener('click', openPairing);
+
+/* ---------- 회사 PC 연결 안내 (처음 한 번 + "연결 방법 보기") ---------- */
+const GUIDE_KEY = 'work-photos-pc-guide-seen-v1';
+const PC_URL = new URL('pc.html', location.origin + location.pathname).href;
+$('pc-guide-url').textContent = PC_URL.replace(/^https?:\/\//, '');
+function openPcGuide() { $('pc-guide-status').textContent = ''; $('pc-guide').showModal(); }
+function closePcGuide() { try { localStorage.setItem(GUIDE_KEY, '1'); } catch { /* 무시 */ } $('pc-guide').close(); }
+function maybeShowPcGuide() {
+  if (!window.Relay?.configured() || pcLink()) return;
+  try { if (localStorage.getItem(GUIDE_KEY) === '1') return; } catch { /* 저장이 막혀 있으면 보여 줘요 */ }
+  openPcGuide();
+}
+async function copyPcUrl() {
+  try { await navigator.clipboard.writeText(PC_URL); $('pc-guide-status').textContent = '✓ 주소를 복사했어요. 카톡 “나와의 채팅”에 붙여 넣어 보내세요.'; }
+  catch { $('pc-guide-status').textContent = `복사가 안 됐어요. 회사 PC 크롬 주소창에 ${PC_URL.replace(/^https?:\/\//, '')} 를 직접 입력해 주세요.`; }
+}
+$('pc-guide-share').addEventListener('click', async () => {
+  if (!navigator.share) { copyPcUrl(); return; }
+  try { await navigator.share({ title:'바로샷 PC 받기', text:'회사 PC에서 이 주소를 크롬으로 열어 주세요', url:PC_URL }); }
+  catch (error) { if (error?.name !== 'AbortError') copyPcUrl(); }
+});
+$('pc-guide-copy').addEventListener('click', copyPcUrl);
+$('pc-guide-later').addEventListener('click', closePcGuide);
+$('pc-guide-go').addEventListener('click', () => { closePcGuide(); openPairing(); });
+$('pc-guide').addEventListener('cancel', () => { try { localStorage.setItem(GUIDE_KEY, '1'); } catch { /* 무시 */ } });
+$('pc-guide-open').addEventListener('click', openPcGuide);
+$('pair-guide').addEventListener('click', () => { stopPairScan(); $('pair-dialog').close(); openPcGuide(); });
 $('pair-cancel').addEventListener('click', () => $('pair-dialog').close());
 $('pair-dialog').addEventListener('close', stopPairScan);
 $('pair-paste-btn').addEventListener('click', () => {
@@ -998,11 +1029,14 @@ $('send-pc').addEventListener('click', async () => {
   if (!link) { shareStatus('먼저 회사 PC와 연결해요. PC 받기 화면의 QR을 비춰 주세요. 연결되면 다시 “회사 PC로 보내기”를 누르세요.', true); openPairing(); return; }
   busy = true; controls();
   let done = 0;
+  // 보내는 동안 화면이 저절로 꺼지지 않게 해요. (꺼지면 보내기가 멈출 수 있어요)
+  let awake = null; try { awake = await navigator.wakeLock?.request('screen'); } catch { /* 안 되는 휴대폰은 안내 문구로만 */ }
+  const keepOn = ' · 다 보낼 때까지 바로샷 화면을 켜 두세요';
   try {
     for (const photo of picked) {
-      shareStatus(`${link.name}로 보내는 중… ${done + 1} / ${picked.length}`);
+      shareStatus(`${link.name}로 보내는 중… ${done + 1} / ${picked.length}${keepOn}`);
       const parts = await Relay.send(link.box, photo, purposeName(photo), photoFiles([photo])[0].name.replace(/_1(\.\w+)$/, '$1'),
-        (part, parts) => { if (parts > 1) shareStatus(`${link.name}로 보내는 중… ${done + 1} / ${picked.length} (${Math.round(part / parts * 100)}%)`); });
+        (part, parts) => { if (parts > 1) shareStatus(`${link.name}로 보내는 중… ${done + 1} / ${picked.length} (${Math.round(part / parts * 100)}%)${keepOn}`); });
       done++;
       // PC가 받았다는 표시가 오기 전까지는 "PC 대기"예요.
       const updated = { ...photo, pcSent:Date.now(), pcWait:true, pcParts:parts, pcBox:link.box, pcCleaned:false, sentTo:addPlace(photo, 'PC') };
@@ -1015,7 +1049,7 @@ $('send-pc').addEventListener('click', async () => {
     shareStatus(`✓ ${link.name}로 ${done}개를 보냈어요. PC 받기를 열면 목적별 폴더에 저장되고, 사진 위 “PC 대기”가 “✓PC”로 바뀌어요. (${Relay.KEEP_DAYS}일 안에 PC 받기를 안 열면 다시 보내야 해요)`);
   } catch (error) {
     shareStatus(`${done ? `${done}장은 보냈지만, ` : ''}PC로 보내지 못했어요. 인터넷 연결을 확인하고 다시 눌러 주세요.${error?.message === 'not-configured' ? ' (중계 설정 없음)' : ''}`, true);
-  } finally { busy = false; controls(); renderPhotos(); }
+  } finally { awake?.release().catch(() => {}); busy = false; controls(); renderPhotos(); }
 });
 
 /* ---------- 목적 이름 바꾸기 (사진은 그대로, 이름만 바뀌어요) ---------- */
@@ -1494,7 +1528,7 @@ async function initialize() {
         : `지금 “${BROWSER_NAME}”에서 열었어요. 이 앱은 크롬에서만 사진 보내기·저장·회사 PC 연결이 제대로 돼요.`;
     }
     await receiveSharedPhotos();
-    receivePairing(); renderPcButton();
+    receivePairing(); renderPcButton(); maybeShowPcGuide();
     watchPcReceipts(); cleanExpiredPcSends();
     const lost = photos.filter(p => pcState(p) === 'lost').length;
     if (lost) notice(`PC가 ${window.Relay?.KEEP_DAYS || 7}일 동안 받지 않은 사진이 ${lost}개 있어요. 사진 위 빨간 “PC 다시 보내기”를 골라 다시 보내 주세요. (사진은 휴대폰에 그대로 있어요)`, true);

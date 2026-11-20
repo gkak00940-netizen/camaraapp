@@ -12,10 +12,10 @@
   <link rel="apple-touch-icon" href="icons/icon-192.png">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="바로샷">
-  <link rel="stylesheet" href="style.css?v=33">
-  <script src="config.js?v=33" defer></script>
-  <script src="relay.js?v=33" defer></script>
-  <script src="app.js?v=33" defer></script>
+  <link rel="stylesheet" href="style.css?v=34">
+  <script src="config.js?v=34" defer></script>
+  <script src="relay.js?v=34" defer></script>
+  <script src="app.js?v=34" defer></script>
 </head>
 <body>
   <!-- 크롬이 아닌 브라우저(삼성 인터넷 등)에서 열면 맨 위에 나와요 -->
@@ -50,7 +50,7 @@
     <!-- 회사 PC 연결 상태: 늘 보이게 해서, 연결됐는지 바로 알 수 있어요 -->
     <section id="pc-card" class="card pc-card" hidden aria-label="회사 PC 연결">
       <span class="pc-card-icon" aria-hidden="true">🖥</span>
-      <span class="pc-card-text"><b id="pc-card-title">회사 PC 연결 안 됨</b><small id="pc-card-sub">PC 받기 화면의 QR을 이 앱으로 찍어 연결해요</small></span>
+      <span class="pc-card-text"><b id="pc-card-title">회사 PC 연결 안 됨</b><small id="pc-card-sub">PC 받기 화면의 QR을 이 앱으로 찍어 연결해요</small><button type="button" id="pc-guide-open" class="link-btn">연결 방법 보기</button></span>
       <button type="button" id="pc-card-btn" class="accent small">연결하기</button>
     </section>
 
@@ -118,7 +118,7 @@
       <p class="quality-sub">아주 선명한 원본이 필요하면 휴대폰 기본 카메라로 찍어 갤러리에서 보내세요.</p>
       <div class="quality-actions"><button type="button" id="quality-ok" class="accent small">알겠어요</button></div>
     </div>
-    <p id="rec-timer" class="rec-timer" hidden><span class="rec-dot" aria-hidden="true"></span><span id="rec-time">00:00</span><small id="rec-size"></small></p>
+    <p id="rec-timer" class="rec-timer" hidden><span class="rec-dot" aria-hidden="true"></span><span id="rec-time">00:00</span><span class="rec-max"> / 05:00</span><small id="rec-size"></small></p>
     <div class="cam-bottom">
       <!-- 확대·축소: 두 손가락으로 벌리고 오므리거나, 배율 버튼을 눌러요 -->
       <div id="cam-zoom" class="cam-zoom" role="group" aria-label="확대·축소" hidden></div>
@@ -151,9 +151,25 @@
   <!-- 이전 방식(작은 창)은 쓰지 않지만, 다른 코드가 찾을 수 있게 남겨 둬요 -->
   <dialog id="photo-dialog" hidden><p id="large-caption"></p><button type="button" id="close-photo">닫기</button><img id="large-photo" alt=""><video id="large-video" hidden></video></dialog>
   <!-- 회사 PC 연결: 이 앱 안에서 QR을 찍어요. (휴대폰 카메라 앱으로 찍으면 다른 브라우저에 저장될 수 있어서) -->
+  <!-- 회사 PC 연결 안내: 아직 연결 안 한 사람에게 앱을 처음 열 때 한 번 보여 줘요 -->
+  <dialog id="pc-guide" class="pc-guide" aria-labelledby="pc-guide-title">
+    <h2 id="pc-guide-title">회사 PC로 사진 받기</h2>
+    <p class="help">처음 한 번만 하면 돼요.</p>
+    <ol class="guide-steps">
+      <li><span class="step-no" aria-hidden="true">1</span><div>회사 PC 크롬에서 <b id="pc-guide-url" class="guide-url">baroshot.kr/pc.html</b> 열기
+        <div class="guide-btns"><button type="button" id="pc-guide-share" class="small">📤 주소 보내기</button><button type="button" id="pc-guide-copy" class="small">복사</button></div>
+        <small class="guide-sub">카톡 “나와의 채팅”으로 보내 PC 카톡에서 누르면 편해요</small>
+        <p class="guide-install">⬇ 열린 화면 위쪽 <b>“바탕화면에 설치”</b>를 누르면, 다음부터 바탕화면 아이콘으로 바로 열려요</p></div></li>
+      <li><span class="step-no" aria-hidden="true">2</span><div>사진 저장할 <b>폴더</b> 고르기</div></li>
+      <li><span class="step-no" aria-hidden="true">3</span><div>PC에 뜬 <b>QR</b>을 “지금 연결하기”로 찍기</div></li>
+    </ol>
+    <p id="pc-guide-status" class="help guide-status" role="status"></p>
+    <div class="dialog-actions"><button type="button" id="pc-guide-later">나중에</button><button type="button" id="pc-guide-go" class="accent">지금 연결하기</button></div>
+  </dialog>
   <dialog id="pair-dialog" class="pair-dialog" aria-labelledby="pair-title">
     <h2 id="pair-title">회사 PC와 연결</h2>
     <p class="help">회사 PC에서 <b>PC 받기</b> 화면을 열고, 화면의 <b>QR</b>을 아래 네모 안에 비춰 주세요.</p>
+    <p id="pair-noqr" class="help pair-noqr">PC에 QR이 아직 없나요? 회사 PC 크롬에서 <b>baroshot.kr/pc.html</b>을 먼저 열어 주세요. <button type="button" id="pair-guide" class="link-btn">방법 보기</button></p>
     <div id="pair-scan" class="pair-scan"><video id="pair-video" playsinline muted></video><span class="pair-frame" aria-hidden="true"></span></div>
     <p id="pair-status" class="help" role="status"></p>
     <p class="help pair-keep">💡 PC 받기가 꺼져 있어도 보낸 사진은 <b>7일 동안</b> 기다려요. 그 안에 PC 받기를 열면 자동으로 들어와요.

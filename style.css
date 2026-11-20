@@ -329,3 +329,22 @@ dialog h2 { font-size:21px; }
 .share-hint[hidden] { display:none; }
 .share-hint > span { flex:1; }
 .share-hint-close { flex:none; width:44px; min-height:44px; padding:0; border:0; border-radius:50%; background:#ffffff26; color:white; font-size:18px; }
+
+/* 회사 PC 연결 안내 창 */
+.pc-guide { max-width:460px; }
+.guide-steps { list-style:none; margin:12px 0 4px; padding:0; display:grid; gap:14px; }
+.guide-steps li { display:flex; gap:12px; align-items:flex-start; }
+.step-no { flex:none; width:28px; height:28px; border-radius:50%; background:var(--navy); color:white; font-weight:800; font-size:15px; display:flex; align-items:center; justify-content:center; }
+.guide-url { color:var(--navy); word-break:break-all; }
+.guide-btns { display:flex; gap:8px; margin:8px 0 4px; }
+.guide-btns .small { min-height:44px; }
+.guide-sub { display:block; color:var(--muted); font-size:13px; }
+.guide-install { margin:8px 0 0; padding:8px 10px; border-radius:10px; background:#e8f5ec; color:#1e6b2c; font-size:14px; line-height:1.5; }
+.guide-status { min-height:0; color:#1e6b2c; font-weight:700; }
+.link-btn { min-height:32px; padding:2px 0; border:0; background:none; color:var(--navy-2); font-size:13px; font-weight:700; text-decoration:underline; text-align:left; }
+.pair-noqr { font-size:14px; color:var(--muted); }
+.rec-max { opacity:.7; font-weight:500; }
+.rec-timer { white-space:nowrap; }
+.rec-max { margin-left:-6px; font-size:15px; }
+/* 긴 안내는 줄을 바꿔 화면 안에 보여 줘요 */
+.cam-toast { width:max-content; max-width:calc(100% - 28px); white-space:normal; text-align:center; border-radius:14px; }
